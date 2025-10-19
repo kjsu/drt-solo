@@ -22,7 +22,7 @@ const ActionPanel = () => {
       <div className="border border-gray-300 rounded-xl overflow-hidden">
         {/* 출발지 */}
         <div className="flex items-center px-4 py-3 border-b border-gray-200">
-          <div className="w-3 h-3 rounded-full bg-blue-500 mr-3" />
+          <div className="w-3 h-3 rounded-full border-3 border-blue-900 mr-3" />
           <div className="flex-1">
             <p className="text-sm text-gray-700 font-medium">
               출발지: {start ? `${start.lat.toFixed(5)}, ${start.lng.toFixed(5)}` : "지도에서 출발지 선택"}
@@ -32,7 +32,7 @@ const ActionPanel = () => {
 
         {/* 도착지 */}
         <div className="flex items-center px-4 py-3">
-          <div className="w-3 h-3 rounded-full bg-red-500 mr-3" />
+          <div className="w-3 h-3 rounded-full border-3 border-red-500 mr-3" />
           <input
             id="end"
             type="text"
