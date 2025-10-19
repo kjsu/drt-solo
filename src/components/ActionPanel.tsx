@@ -19,9 +19,10 @@ const ActionPanel = () => {
       </p>
 
       {/* 출발지 / 도착지 입력창 */}
-      <div className="border border-gray-300 rounded-xl overflow-hidden">
+      <div className="border border-blue-700 rounded-xl overflow-hidden">
         {/* 출발지 */}
-        <div className="flex items-center px-4 py-3 border-b border-gray-200">
+        <div className="flex items-center px-4 py-3">
+          {/* 네이비 도넛 */}
           <div className="w-3 h-3 rounded-full border-3 border-blue-900 mr-3" />
           <div className="flex-1">
             <p className="text-sm text-gray-700 font-medium">
@@ -30,8 +31,12 @@ const ActionPanel = () => {
           </div>
         </div>
 
+        {/* 가운데 구분선: 양 끝이 살짝 끊어진 형태 */}
+        <div aria-hidden className="h-px bg-gray-300/70 mx-4 rounded-full scale-y-50" />
+
         {/* 도착지 */}
         <div className="flex items-center px-4 py-3">
+          {/* 진한 빨간 도넛 */}
           <div className="w-3 h-3 rounded-full border-3 border-red-500 mr-3" />
           <input
             id="end"
@@ -39,7 +44,7 @@ const ActionPanel = () => {
             placeholder="도착지 검색"
             value={end ? `${end.lat.toFixed(5)}, ${end.lng.toFixed(5)}` : ""}
             onChange={(e) => {
-              const [latStr, lngStr] = e.target.value.split(",").map(s => s.trim())
+              const [latStr, lngStr] = e.target.value.split(",").map((s) => s.trim())
               const lat = parseFloat(latStr)
               const lng = parseFloat(lngStr)
               if (!isNaN(lat) && !isNaN(lng)) setEnd({ lat, lng })
