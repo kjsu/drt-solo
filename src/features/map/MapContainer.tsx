@@ -2,13 +2,10 @@ import { useEffect, useRef, useState } from "react"
 import { useDRTStore } from "@/store/drtStore"
 
 const SERVICE_AREAS = [
-  {
-    name: "금천구",
-    center: { lat: 37.4563, lng: 126.8951 },
-    radius: 2500, // meters
-  },
+  { name: "금천구", center: { lat: 37.4563, lng: 126.8951 }, radius: 2500 },
 ]
 
+// -------- utils --------
 function isInsideServiceArea(lat: number, lng: number): string | null {
   for (const area of SERVICE_AREAS) {
     const dist = getDistanceFromLatLonInM(lat, lng, area.center.lat, area.center.lng)
@@ -16,54 +13,73 @@ function isInsideServiceArea(lat: number, lng: number): string | null {
   }
   return null
 }
-
 function getDistanceFromLatLonInM(lat1: number, lon1: number, lat2: number, lon2: number) {
-  const R = 6371000 // m
+  const R = 6371000
   const dLat = deg2rad(lat2 - lat1)
   const dLon = deg2rad(lon2 - lon1)
   const a =
     Math.sin(dLat / 2) * Math.sin(dLat / 2) +
-    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) *
-    Math.sin(dLon / 2) * Math.sin(dLon / 2)
+    Math.cos(deg2rad(lat1)) * Math.cos(deg2rad(lat2)) * Math.sin(dLon / 2) * Math.sin(dLon / 2)
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a))
   return R * c
 }
-
 function deg2rad(deg: number) {
   return deg * (Math.PI / 180)
 }
 
-/** 반원형(윗부분 둥근 캡) 라벨 마커 DOM 생성 */
-function createSemiCircleLabel(text: string, intense = false): HTMLElement {
+// -------- capsule label (using CSS var) --------
+// 전역에 :root { --color-blue-900: #0A1F47; } 처럼 지정되어 있어야 합니다.
+const COLOR_VAR = "var(--color-blue-900, #0A1F47)"
+
+function applyNoWrap(el: HTMLElement) {
+  el.style.setProperty("writing-mode", "horizontal-tb", "important")
+  el.style.setProperty("text-orientation", "mixed", "important")
+  el.style.setProperty("white-space", "nowrap", "important")
+  el.style.setProperty("word-break", "keep-all", "important")
+  el.style.setProperty("overflow-wrap", "normal", "important")
+    ; (el.style as any).textWrap && el.style.setProperty("text-wrap", "nowrap", "important")
+  el.style.setProperty("hyphens", "none", "important")
+  el.style.setProperty("line-break", "auto", "important")
+  el.style.setProperty("letter-spacing", "0.2px", "important")
+}
+
+/** 캡슐 + 하단 세로 라인(마커 꼬리, 캡슐과 밀착) DOM 생성 */
+function createCapsuleMarker(text: string): HTMLElement {
   const wrap = document.createElement("div")
   wrap.style.pointerEvents = "none"
-  wrap.style.display = "inline-block"
+  wrap.style.display = "inline-flex"
+  wrap.style.flexDirection = "column"
+  wrap.style.alignItems = "center"
 
-  // 본체(반원 캡)
-  const bubble = document.createElement("div")
-  bubble.textContent = text
-  bubble.style.display = "inline-block"
-  bubble.style.padding = "6px 12px"
-  bubble.style.fontSize = "12px"
-  bubble.style.lineHeight = "1"
-  bubble.style.fontWeight = "600"
-  bubble.style.color = "#fff"
-  // 파란색 농도: 드래그 중엔 더 진하게
-  bubble.style.background = intense ? "#1d4ed8" /* blue-700 */ : "#2563eb" /* blue-600 */
-  bubble.style.borderTopLeftRadius = "9999px"
-  bubble.style.borderTopRightRadius = "9999px"
-  bubble.style.borderBottomLeftRadius = "0"
-  bubble.style.borderBottomRightRadius = "0"
-  bubble.style.boxShadow = "0 4px 10px rgba(0,0,0,0.15)"
-  bubble.style.transform = "translateY(1px)" // 살짝 내려 보정
+  // 캡슐
+  const capsule = document.createElement("div")
+  capsule.textContent = text
+  capsule.style.display = "inline-flex"
+  capsule.style.alignItems = "center"
+  capsule.style.justifyContent = "center"
+  capsule.style.padding = "8px 14px"
+  capsule.style.fontSize = "12px"
+  capsule.style.lineHeight = "1"
+  capsule.style.fontWeight = "700"
+  capsule.style.color = "#ffffff"
+  capsule.style.background = COLOR_VAR
+  capsule.style.borderRadius = "9999px" // 캡슐
+  capsule.style.boxShadow = "0 6px 14px rgba(0,0,0,0.16)"
+  // 캡슐-꼬리 사이 틈 제거를 위해 translateY 제거
+  capsule.style.fontFamily =
+    `-apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Noto Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", "Helvetica Neue", Arial, sans-serif`
+  applyNoWrap(capsule)
 
-  // 아래 살짝 평평한 밑변을 기준점으로 삼기 위해 spacer(투명 영역) 추가
-  const spacer = document.createElement("div")
-  spacer.style.height = "4px" // 앵커 하단 여백
-  spacer.style.width = "100%"
+  // 꼬리(세로 직선) — 캡슐과 밀착
+  const tail = document.createElement("div")
+  tail.style.width = "2px"
+  tail.style.height = "16px" // 필요 시 길이 조절
+  tail.style.background = COLOR_VAR
+  tail.style.marginTop = "0"  // ← 캡슐과 바로 붙도록
+  tail.style.borderRadius = "1px"
 
-  wrap.appendChild(bubble)
-  wrap.appendChild(spacer)
+  wrap.appendChild(capsule)
+  wrap.appendChild(tail)
   return wrap
 }
 
@@ -88,39 +104,37 @@ const MapContainer = () => {
       zoom: 14,
     })
 
-    /** 현재 상태에 맞는 마커 아이콘(반원형 라벨)로 교체 */
-    const setMarkerIcon = (text: string, intense = false) => {
-      const el = createSemiCircleLabel(text, intense)
-      // 대략적인 앵커: 중앙 하단(텍스트 길이 변동 고려하여 실제 DOM 크기로 재계산)
-      // content가 DOM 요소이므로 한 번 붙인 뒤 크기를 읽어 anchor를 보정할 수 있음
+    // 마커 아이콘 설정 (DOM + anchor 보정)
+    const setMarkerIcon = (text: string) => {
+      const el = createCapsuleMarker(text)
       markerRef.current?.setIcon({
         content: el,
-        anchor: new window.naver.maps.Point(40, 22), // 초기값(대부분의 짧은 텍스트에서 보기 좋게)
+        anchor: new window.naver.maps.Point(50, 34), // 초기값
       })
-      // 다음 프레임에 실제 크기로 앵커 보정
       requestAnimationFrame(() => {
-        const w = el.getBoundingClientRect().width || 80
-        const h = el.getBoundingClientRect().height || 26
+        const rect = el.getBoundingClientRect()
+        const w = rect.width || 100
+        const h = rect.height || 40
         markerRef.current?.setIcon({
           content: el,
-          anchor: new window.naver.maps.Point(w / 2, h), // 중앙하단 기준
+          anchor: new window.naver.maps.Point(w / 2, h), // 전체 DOM의 중앙 하단(꼬리 끝이 기준점)
         })
       })
     }
 
-    // 초기 마커 생성
+    // 초기 마커(캡슐 + 직선 꼬리)
     const marker = new window.naver.maps.Marker({
       position: defaultLocation,
       map,
       icon: {
-        content: createSemiCircleLabel("여기서 출발", false),
-        anchor: new window.naver.maps.Point(40, 22),
+        content: createCapsuleMarker("여기서 출발"),
+        anchor: new window.naver.maps.Point(50, 34),
       },
       zIndex: 10,
     })
     markerRef.current = marker
-    // 한 프레임 뒤 실제 크기로 앵커 보정
-    requestAnimationFrame(() => setMarkerIcon("여기서 출발", false))
+    // 실제 크기에 맞춰 anchor 1프레임 후 보정
+    requestAnimationFrame(() => setMarkerIcon("여기서 출발"))
 
     const syncMarkerToCenter = () => {
       if (rafQueuedRef.current) return
@@ -143,17 +157,17 @@ const MapContainer = () => {
       setStart({ lat, lng })
     }
 
-    // 최초 1회 반영
+    // 최초 반영
     commitCenterState()
 
-    // 드래그 시작 → 라벨: "· · ·", 더 진한 파란색, 중앙 동기화
+    // 드래그 시작
     const dragStartListener = window.naver.maps.Event.addListener(map, "dragstart", () => {
       setIsDragging(true)
-      setMarkerIcon("· · ·", true)
+      setMarkerIcon("· · ·") // 색은 항상 --color-blue-900, 텍스트만 변경
       syncMarkerToCenter()
     })
 
-    // 드래그 중 → 매 프레임 중앙 동기화
+    // 드래그 중
     const dragListener = window.naver.maps.Event.addListener(map, "drag", () => {
       syncMarkerToCenter()
     })
@@ -163,10 +177,10 @@ const MapContainer = () => {
       syncMarkerToCenter()
     })
 
-    // 드래그 종료 → 라벨 복구, 상태 커밋
+    // 드래그 종료
     const dragEndListener = window.naver.maps.Event.addListener(map, "dragend", () => {
       setIsDragging(false)
-      setMarkerIcon("여기서 출발", false)
+      setMarkerIcon("여기서 출발")
       commitCenterState()
     })
 
@@ -179,7 +193,6 @@ const MapContainer = () => {
     }
   }, [setStart, setServiceArea])
 
-  // isDragging 값은 나중에 UI와 더 연동할 때 사용 가능
   return <div ref={mapRef} className="w-full h-full" />
 }
 
