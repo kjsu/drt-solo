@@ -32,7 +32,7 @@ const ActionPanel = () => {
         </div>
 
         {/* 가운데 구분선: 양 끝이 살짝 끊어진 형태 */}
-        <div aria-hidden className="h-px bg-gray-300/70 mx-4 rounded-full scale-y-50" />
+        <div aria-hidden className="h-px bg-gray-300/30 mx-4 rounded-full scale-y-50" />
 
         {/* 도착지 */}
         <div className="flex items-center px-4 py-3">
