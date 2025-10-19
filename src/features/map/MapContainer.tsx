@@ -77,6 +77,7 @@ function createCapsuleMarker(text: string): HTMLElement {
   tail.style.background = COLOR_VAR
   tail.style.marginTop = "0"  // ← 캡슐과 바로 붙도록
   tail.style.borderRadius = "1px"
+  tail.style.marginTop = "-1px"
 
   wrap.appendChild(capsule)
   wrap.appendChild(tail)
