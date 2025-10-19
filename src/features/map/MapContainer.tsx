@@ -72,7 +72,7 @@ const MapContainer = () => {
     window.naver.maps.Event.addListener(map, "dragend", updateStateFromCenter)
   }, [setStart, setServiceArea])
 
-  return <div ref={mapRef} className="w-full h-full m-0 p-0" />
+  return <div ref={mapRef} className="w-full h-full" />
 }
 
 export default MapContainer
