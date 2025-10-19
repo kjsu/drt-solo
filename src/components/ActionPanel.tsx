@@ -7,40 +7,44 @@ const ActionPanel = () => {
   const setEnd = useDRTStore((state) => state.setEnd)
 
   const renderMessage = () => {
-    if (serviceArea === null) return "서비스 지역이 아닙니다."
-    return `${serviceArea} 지역 내에서 서비스를 이용할 수 있습니다.`
+    if (serviceArea === null) return "가까운 서비스 지역에서 DRT를 호출해 보세요"
+    return `${serviceArea} 지역에서 DRT를 호출해 보세요`
   }
 
   return (
-    <div className="w-full h-full bg-white shadow-lg p-4 overflow-y-auto">
-      <p className="text-sm text-gray-600 mb-4 text-center">{renderMessage()}</p>
+    <div className="w-full h-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
+      {/* 안내 문구 */}
+      <p className="text-center text-[15px] font-medium text-gray-800 mb-5">
+        {renderMessage()}
+      </p>
 
-      <div className="flex flex-col gap-3">
-        <div className="flex flex-col">
-          <label className="text-xs text-gray-500 mb-1" htmlFor="start">출발지</label>
-          <input
-            id="start"
-            type="text"
-            readOnly
-            value={start ? `${start.lat.toFixed(5)}, ${start.lng.toFixed(5)}` : "지도 중앙을 이동해 설정"}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm bg-gray-100 text-gray-700 cursor-not-allowed"
-          />
+      {/* 출발지 / 도착지 입력창 */}
+      <div className="border border-gray-300 rounded-xl overflow-hidden">
+        {/* 출발지 */}
+        <div className="flex items-center px-4 py-3 border-b border-gray-200">
+          <div className="w-3 h-3 rounded-full bg-blue-500 mr-3" />
+          <div className="flex-1">
+            <p className="text-sm text-gray-700 font-medium">
+              출발지: {start ? `${start.lat.toFixed(5)}, ${start.lng.toFixed(5)}` : "지도에서 출발지 선택"}
+            </p>
+          </div>
         </div>
 
-        <div className="flex flex-col">
-          <label className="text-xs text-gray-500 mb-1" htmlFor="end">도착지</label>
+        {/* 도착지 */}
+        <div className="flex items-center px-4 py-3">
+          <div className="w-3 h-3 rounded-full bg-red-500 mr-3" />
           <input
             id="end"
             type="text"
-            placeholder="도착지를 입력해주세요"
+            placeholder="도착지 검색"
             value={end ? `${end.lat.toFixed(5)}, ${end.lng.toFixed(5)}` : ""}
             onChange={(e) => {
-              const [latStr, lngStr] = e.target.value.split(',').map(s => s.trim())
+              const [latStr, lngStr] = e.target.value.split(",").map(s => s.trim())
               const lat = parseFloat(latStr)
               const lng = parseFloat(lngStr)
               if (!isNaN(lat) && !isNaN(lng)) setEnd({ lat, lng })
             }}
-            className="w-full border border-gray-300 rounded px-3 py-2 text-sm"
+            className="flex-1 text-sm text-gray-700 placeholder-gray-400 focus:outline-none"
           />
         </div>
       </div>
