@@ -5,11 +5,10 @@
       "@/*": ["*"]
     },
     "module": "ESNext",
-    "moduleResolution": "Bundler"
+    "moduleResolution": "Bundler",
+    "jsx": "react-jsx",
+    "target": "ESNext",
+    "strict": true
   },
-  "files": [],
-  "references": [
-    { "path": "./tsconfig.app.json" },
-    { "path": "./tsconfig.node.json" }
-  ]
+  "include": ["src", "src/types"]
 }
