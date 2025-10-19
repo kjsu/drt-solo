@@ -1,4 +1,12 @@
 {
+  "compilerOptions": {
+    "baseUrl": "src",
+    "paths": {
+      "@/*": ["*"]
+    },
+    "module": "ESNext",
+    "moduleResolution": "Bundler"
+  },
   "files": [],
   "references": [
     { "path": "./tsconfig.app.json" },
