@@ -1,5 +1,6 @@
 import { useEffect, useRef } from "react"
 import { useDRTStore } from "@/store/drtStore"
+import { drawServiceAreas, clearServiceAreas, ServiceAreaOverlay } from "@/features/map/serviceAreaOverlay"
 
 // utils
 import {
@@ -115,6 +116,8 @@ const MapContainer = () => {
     }
   }
 
+  const serviceAreaOverlaysRef = useRef<ServiceAreaOverlay[]>([])
+
   // 지도 초기화
   useEffect(() => {
     if (!window.naver || !mapDivRef.current) return
@@ -127,6 +130,16 @@ const MapContainer = () => {
     mapRef.current = map
     initialCenterRef.current = defaultLocation
     initialZoomRef.current = 14
+
+    // 서비스 지역 반투명 오버레이 그리기
+    serviceAreaOverlaysRef.current = drawServiceAreas(map, {
+      strokeColor: "#2563eb",
+      strokeOpacity: 0.9,
+      strokeWeight: 2,
+      fillColor: "#3b82f6",
+      fillOpacity: 0.10,
+      zIndex: 1,
+    })
 
     const startCapsule = createCapsuleMarker("여기서 출발", COLOR_BLUE)
     startRootRef.current = startCapsule.root
@@ -207,6 +220,7 @@ const MapContainer = () => {
       window.naver.maps.Event.removeListener(onIdle)
       startMarkerRef.current?.setMap(null)
       endMarkerRef.current?.setMap(null)
+      clearServiceAreas(serviceAreaOverlaysRef.current)
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
