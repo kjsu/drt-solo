@@ -1,7 +1,6 @@
 import { create } from "zustand"
 
-export type Phase = "idle" | "routing" | "selected" // ← 사용 중인 단계 전부 포함
-
+export type Phase = "idle" | "routing" | "selected"
 type LatLng = { lat: number; lng: number } | null
 
 interface DRTState {
@@ -16,6 +15,10 @@ interface DRTState {
 
   serviceArea: string | null
   setServiceArea: (name: string | null) => void
+
+  // ⬇️ 초기화 트리거 (X 버튼 / 다시 선택하기)
+  resetKey: number
+  bumpResetKey: () => void
 }
 
 export const useDRTStore = create<DRTState>((set) => ({
@@ -30,4 +33,7 @@ export const useDRTStore = create<DRTState>((set) => ({
 
   serviceArea: null,
   setServiceArea: (name) => set({ serviceArea: name }),
+
+  resetKey: 0,
+  bumpResetKey: () => set((s) => ({ resetKey: s.resetKey + 1 })),
 }))

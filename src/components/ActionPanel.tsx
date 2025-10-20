@@ -18,28 +18,18 @@ function formatServiceLabel(raw: string) {
     동안구: "안양시 동안",
   }
   if (MAP[raw]) return MAP[raw]
-
   const cityGu = raw.match(/^(.+?)시\s?(.+?)구$/)
   if (cityGu) return `${cityGu[1]}시 ${cityGu[2]}`
-
   const seoulGu = raw.match(/^서울시\s?(.+?)구$/)
   if (seoulGu) return `서울시 ${seoulGu[1]}`
-
   const onlyGu = raw.match(/^(.+?)구$/)
   if (onlyGu) return `서울시 ${onlyGu[1]}`
-
   const onlyCity = raw.match(/^(.+?)시$/)
   if (onlyCity) return `${onlyCity[0]} ${onlyCity[1]}`
   return raw
 }
 
-const HeaderNotice = ({
-  serviceArea,
-  phase,
-}: {
-  serviceArea: string | null
-  phase: string
-}) => {
+const HeaderNotice = ({ serviceArea, phase }: { serviceArea: string | null; phase: string }) => {
   if (phase === "routing") {
     return (
       <div className="flex items-center gap-3 mb-4">
@@ -105,6 +95,7 @@ const ActionPanel = () => {
   const phase = useDRTStore((s) => s.phase)
   const setEnd = useDRTStore((s) => s.setEnd)
   const setPhase = useDRTStore((s) => s.setPhase)
+  const bumpResetKey = useDRTStore((s) => s.bumpResetKey)
 
   // routing 단계
   if (phase === "routing") {
@@ -132,8 +123,8 @@ const ActionPanel = () => {
           disabled={!canConfirm}
           onClick={() => canConfirm && setPhase("selected")}
           className={`mt-auto h-12 w-full rounded-xl text-[15px] font-semibold active:scale-[0.99] ${canConfirm
-              ? "bg-blue-600 text-white shadow-[0_4px_12px_rgba(37,99,235,0.35)]"
-              : "bg-gray-200 text-gray-400 cursor-not-allowed"
+            ? "bg-blue-600 text-white shadow-[0_4px_12px_rgba(37,99,235,0.35)]"
+            : "bg-gray-200 text-gray-400 cursor-not-allowed"
             }`}
         >
           확인
@@ -142,7 +133,7 @@ const ActionPanel = () => {
     )
   }
 
-  // selected 단계
+  // selected 단계 (경로 화면)
   if (phase === "selected") {
     return (
       <div className="w-full h-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
@@ -168,9 +159,10 @@ const ActionPanel = () => {
           </div>
         </div>
 
+        {/* ⬇️ X 버튼과 완전히 동일한 초기화 실행 */}
         <button
           type="button"
-          onClick={() => { setEnd(null); setPhase("idle") }}
+          onClick={() => bumpResetKey()}
           className="mt-auto h-11 w-full rounded-xl border border-gray-300 text-[14px] font-medium text-gray-700 active:scale-[0.99]"
         >
           다시 선택하기
@@ -205,17 +197,12 @@ const ActionPanel = () => {
             type="text"
             placeholder="도착지 검색"
             value={end ? `${end.lat.toFixed(5)}, ${end.lng.toFixed(5)}` : ""}
-            onFocus={() => {
-              // 이미 routing이면 다시 세팅하지 않기 (무한루프 방지)
-              if (phase !== "routing") {
-                setPhase("routing")
-              }
-            }}
+            onFocus={() => { if (phase !== "routing") setPhase("routing") }}
             onChange={(e) => {
               const [latStr, lngStr] = e.target.value.split(",").map((s) => s.trim())
               const lat = parseFloat(latStr)
               const lng = parseFloat(lngStr)
-              if (!isNaN(lat) && !isNaN(lng)) setEnd({ lat, lng })
+              if (!isNaN(lat) && !isNaN(lng)) useDRTStore.getState().setEnd({ lat, lng })
             }}
             className="flex-1 text-sm text-gray-700 placeholder-gray-400 focus:outline-none"
           />

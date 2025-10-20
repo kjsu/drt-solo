@@ -97,14 +97,15 @@ function setLabelAndFix(marker: naver.maps.Marker | null, root: HTMLElement | nu
   fixAnchor(marker, root)
 }
 
-// ────────────── 더미 라우팅 API (이전 그대로) ──────────────
+// ────────────── 더미 라우팅 API ──────────────
 type LatLng = { lat: number; lng: number }
 function metersToDeg(lat: number, dLatM: number, dLngM: number): LatLng {
   const dLat = dLatM / 111_320
   const dLng = dLngM / (111_320 * Math.cos((lat * Math.PI) / 180))
   return { lat: lat + dLat, lng: dLngM === 0 ? 0 : dLng }
 }
-function jitterNear(base: LatLng, radiusM = 60): LatLng {
+// ⬆️ 시각적으로 더 벌어지도록 기본 반경을 키움(기존 60 → 180)
+function jitterNear(base: LatLng, radiusM = 180): LatLng {
   const dx = (Math.random() * 2 - 1) * radiusM
   const dy = (Math.random() * 2 - 1) * radiusM
   const d = metersToDeg(base.lat, dy, dx)
@@ -112,7 +113,7 @@ function jitterNear(base: LatLng, radiusM = 60): LatLng {
 }
 function makeCurvedPath(a: LatLng, b: LatLng): LatLng[] {
   const mid: LatLng = { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 }
-  const ctrl = jitterNear(mid, 120)
+  const ctrl = jitterNear(mid, 240) // 곡률도 조금 과감히
   const steps = 20
   const pts: LatLng[] = []
   for (let t = 0; t <= steps; t++) {
@@ -135,8 +136,9 @@ async function planRouteDummy(payload: {
   summary: { distance_m: number; duration_s: number; polyline: LatLng[] }
 }> {
   const { start, end } = payload
-  const pickup = jitterNear(start, 80)
-  const dropoff = jitterNear(end, 80)
+  // ⬇️ 승차/하차를 더 떨어뜨림(220m)
+  const pickup = jitterNear(start, 220)
+  const dropoff = jitterNear(end, 220)
   const polyline = makeCurvedPath(pickup, dropoff)
   const distance_m = getDistanceFromLatLonInM(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng)
   const duration_s = Math.round(distance_m / 7)
@@ -170,16 +172,17 @@ const MapContainer = () => {
   const setEnd = useDRTStore((s) => s.setEnd)
   const setPhase = useDRTStore((s) => s.setPhase)
   const setServiceArea = useDRTStore((s) => s.setServiceArea)
+  const resetKey = useDRTStore((s) => s.resetKey)
 
   // 최신 phase
   const phaseRef = useRef(phase)
   useEffect(() => { phaseRef.current = phase }, [phase])
 
-  // prev phase (routing 전이 감지)
+  // prev phase
   const prevPhaseRef = useRef(phase)
   useEffect(() => { prevPhaseRef.current = phase }, [phase])
 
-  // end 최신값 ref (중복 setEnd 방지)
+  // end 최신값 ref
   const endRef = useRef<typeof end>(end)
   useEffect(() => { endRef.current = end }, [end])
 
@@ -221,7 +224,6 @@ const MapContainer = () => {
     setStart({ lat, lng })
   }
 
-  // 안전 가드: 좌표 변경시에만 setEnd
   function setEndIfChangedLL(ll: naver.maps.LatLng) {
     const next = { lat: ll.lat(), lng: ll.lng() }
     const curr = endRef.current
@@ -279,7 +281,7 @@ const MapContainer = () => {
       if (phaseRef.current === "routing") {
         endMarkerRef.current?.setPosition(center)
         setLabelAndFix(endMarkerRef.current, endRootRef.current, endLabelElRef.current, "도착")
-        setEndIfChangedLL(center) // ← 가드 적용
+        setEndIfChangedLL(center)
       } else {
         startMarker.setPosition(center)
         setLabelAndFix(startMarker, startRootRef.current, startLabelElRef.current, "여기서 출발")
@@ -326,13 +328,12 @@ const MapContainer = () => {
     }
   }, [phase, start, end, setPhase])
 
-  // phase 변화 처리
+  // phase 변화
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
 
     if (phase === "routing") {
-      // "다른 단계 → routing" 으로 전이되는 순간에만 초기화
       if (prevPhaseRef.current !== "routing") {
         routingInitCommittedRef.current = false
       }
@@ -369,27 +370,33 @@ const MapContainer = () => {
         setLabelAndFix(endMarkerRef.current, endRootRef.current!, endLabelElRef.current!, "도착")
       }
 
-      // 초기 1회만 setEnd
       if (!routingInitCommittedRef.current) {
         routingInitCommittedRef.current = true
-        setEndIfChangedLL(centerLL) // ← 가드 적용
+        setEndIfChangedLL(centerLL)
       }
     } else if (phase === "selected") {
-      // 선택 완료: 도착 마커 보장
+      // 도착 마커 보장 + 시작 마커 라벨을 "출발"로 변경
       if (end && endMarkerRef.current) {
         const endLL = new window.naver.maps.LatLng(end.lat, end.lng)
         endMarkerRef.current.setMap(map)
         endMarkerRef.current.setPosition(endLL)
         setLabelAndFix(endMarkerRef.current, endRootRef.current!, endLabelElRef.current!, "도착")
       }
-    } else { // idle 등
+      if (startMarkerRef.current && startRootRef.current && startLabelElRef.current) {
+        setLabelAndFix(startMarkerRef.current, startRootRef.current, startLabelElRef.current, "출발")
+      }
+    } else { // idle
       if (endMarkerRef.current) endMarkerRef.current.setMap(null)
       if (endLabelElRef.current) endLabelElRef.current.textContent = "도착"
+      // 초기 화면 텍스트 복구
+      if (startMarkerRef.current && startRootRef.current && startLabelElRef.current) {
+        setLabelAndFix(startMarkerRef.current, startRootRef.current, startLabelElRef.current, "여기서 출발")
+      }
       clearRouteLayers()
     }
-  }, [phase, start]) // ← setEnd로 인한 재실행을 막기 위해 deps 최소화
+  }, [phase, start])
 
-  // routing 중 end 변경 시: 동일 좌표면 스킵, 다르면 부드럽게 이동
+  // routing 중 end 이동
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
@@ -406,7 +413,7 @@ const MapContainer = () => {
     if (map.getZoom() < 15) map.setZoom(15, true)
   }, [end, phase])
 
-  // selected에서 경로/마커 렌더 (이전 로직 유지)
+  // selected에서 경로/마커 렌더
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
@@ -483,7 +490,6 @@ const MapContainer = () => {
           setLabelAndFix(endMarkerRef.current, endRootRef.current!, endLabelElRef.current!, "도착")
         }
 
-        // 전체 뷰 맞추기
         const bounds = new window.naver.maps.LatLngBounds()
           ;[
             { lat: start.lat, lng: start.lng },
@@ -495,6 +501,7 @@ const MapContainer = () => {
       })()
   }, [phase, start, end])
 
+  // ⬇️ 공용 리셋 함수 (X/다시선택 모두 사용)
   const handleResetToInitial = () => {
     const map = mapRef.current
     if (!map) return
@@ -515,9 +522,18 @@ const MapContainer = () => {
 
     const onceIdle = window.naver.maps.Event.addListener(map, "idle", () => {
       window.naver.maps.Event.removeListener(onceIdle)
+      // 초기 화면으로 돌아오면 "여기서 출발" 로 복구
       commitStartAt(initStart)
     })
   }
+
+  // 🔔 resetKey가 바뀌면 X 버튼과 동일 동작 수행
+  useEffect(() => {
+    if (resetKey > 0) {
+      handleResetToInitial()
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [resetKey])
 
   return (
     <div ref={wrapRef} className="relative w-full h-full">
