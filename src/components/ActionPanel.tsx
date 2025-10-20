@@ -1,16 +1,12 @@
 import { useDRTStore } from "@/store/drtStore"
 
 const VanIcon = () => (
-  <div
-    className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center shrink-0
-               shadow-[0_1px_2px_rgba(0,0,0,0.06)_inset,0_1.5px_6px_rgba(0,0,0,0.06)]"
-    aria-hidden
-  >
-    {/* 심플한 밴 아이콘 (inline SVG) */}
-    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-gray-700">
-      <path d="M3 7.5h10.5c.6 0 1.1.3 1.4.8l2.1 3.2h2.2c.5 0 .8.4.8.8v4.2c0 .5-.4.8-.8.8h-.9a2.75 2.75 0 1 1-5.5 0H9.2a2.75 2.75 0 1 1-5.4 0H3.8c-.4 0-.8-.4-.8-.8V8.3c0-.4.4-.8.8-.8Zm13.6 4-1.6-2.4H13v2.4h3.6ZM7.5 18.9a1.65 1.65 0 1 0 0-3.3 1.65 1.65 0 0 0 0 3.3Zm10.9 0a1.65 1.65 0 1 0 0-3.3 1.65 1.65 0 0 0 0 3.3Z" />
-    </svg>
-  </div>
+  <img
+    src="/icons/van.png"
+    alt=""
+    className="w-[50px] h-[50px] object-contain"
+    draggable={false}
+  />
 )
 
 function formatServiceLabel(raw: string) {
@@ -74,7 +70,7 @@ const HeaderNotice = ({
       <div className="flex items-center gap-3 mb-3">
         <VanIcon />
         <div>
-          <span className="block text-[14px] text-sky-600 leading-[18px]">
+          <span className="block text-[13px] font-medium text-sky-600 leading-[18px]">
             {label}
           </span>
           <span className="block text-[16px] font-semibold text-gray-900">
