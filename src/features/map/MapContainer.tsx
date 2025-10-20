@@ -494,7 +494,7 @@ const MapContainer = () => {
           strokeStyle: "shortdash",
         })
 
-        const pickupCapsule = createCapsuleMarker("승차", "#374151")
+        const pickupCapsule = createCapsuleMarker("탑승", "#374151")
         const dropoffCapsule = createCapsuleMarker("하차", "#374151")
 
         pickupMarkerRef.current = new window.naver.maps.Marker({
