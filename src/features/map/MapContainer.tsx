@@ -126,6 +126,7 @@ const MapContainer = () => {
     const map = new window.naver.maps.Map(mapDivRef.current, {
       center: defaultLocation,
       zoom: 14,
+      tileSpare: 4,
     })
     mapRef.current = map
     initialCenterRef.current = defaultLocation
