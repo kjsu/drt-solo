@@ -1,39 +1,33 @@
-import { create } from 'zustand'
+import { create } from "zustand"
 
-type Location = {
-  lat: number
-  lng: number
-}
+export type Phase = "idle" | "routing" | "selected" // ← 사용 중인 단계 전부 포함
 
-type DRTPhase = 'idle' | 'selected' | 'routing' | 'moving' | 'arrived'
+type LatLng = { lat: number; lng: number } | null
 
-type DRTState = {
-  start: Location | null
-  end: Location | null
-  phase: DRTPhase
+interface DRTState {
+  phase: Phase
+  setPhase: (p: Phase) => void
+
+  start: LatLng
+  setStart: (v: LatLng) => void
+
+  end: LatLng
+  setEnd: (v: LatLng) => void
+
   serviceArea: string | null
-  setStart: (loc: Location) => void
-  setEnd: (loc: Location) => void
-  setPhase: (phase: DRTPhase) => void
-  setServiceArea: (area: string | null) => void
-  reset: () => void
+  setServiceArea: (name: string | null) => void
 }
 
 export const useDRTStore = create<DRTState>((set) => ({
-  start: null,
-  end: null,
-  phase: 'idle',
-  serviceArea: null,
+  phase: "idle",
+  setPhase: (p) => set({ phase: p }),
 
-  setStart: (loc) => set({ start: loc, phase: 'selected' }),
-  setEnd: (loc) => set({ end: loc }),
-  setPhase: (phase) => set({ phase }),
-  setServiceArea: (area) => set({ serviceArea: area }),
-  reset: () =>
-    set({
-      start: null,
-      end: null,
-      phase: 'idle',
-      serviceArea: null,
-    }),
+  start: null,
+  setStart: (v) => set({ start: v }),
+
+  end: null,
+  setEnd: (v) => set({ end: v }),
+
+  serviceArea: null,
+  setServiceArea: (name) => set({ serviceArea: name }),
 }))

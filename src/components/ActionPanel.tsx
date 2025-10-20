@@ -10,7 +10,6 @@ const VanIcon = () => (
 )
 
 function formatServiceLabel(raw: string) {
-  // 명시 매핑(원하면 여기만 추가)
   const MAP: Record<string, string> = {
     금천구: "서울시 금천",
     안양: "안양시 안양",
@@ -20,23 +19,17 @@ function formatServiceLabel(raw: string) {
   }
   if (MAP[raw]) return MAP[raw]
 
-  // 패턴 매핑
-  // "안양시 동안구" → "안양시 동안"
   const cityGu = raw.match(/^(.+?)시\s?(.+?)구$/)
   if (cityGu) return `${cityGu[1]}시 ${cityGu[2]}`
 
-  // "서울시 금천구" → "서울시 금천"
   const seoulGu = raw.match(/^서울시\s?(.+?)구$/)
   if (seoulGu) return `서울시 ${seoulGu[1]}`
 
-  // "금천구" → "서울시 금천" (도시 정보 없는 '구'면 서울시로 보정)
   const onlyGu = raw.match(/^(.+?)구$/)
   if (onlyGu) return `서울시 ${onlyGu[1]}`
 
-  // "군포시" → "군포시 군포" (스샷과 같은 스타일)
   const onlyCity = raw.match(/^(.+?)시$/)
   if (onlyCity) return `${onlyCity[0]} ${onlyCity[1]}`
-
   return raw
 }
 
@@ -47,7 +40,6 @@ const HeaderNotice = ({
   serviceArea: string | null
   phase: string
 }) => {
-  // routing 단계는 기존 문구 유지
   if (phase === "routing") {
     return (
       <div className="flex items-center gap-3 mb-4">
@@ -62,9 +54,7 @@ const HeaderNotice = ({
   }
 
   const isInService = !!serviceArea
-
   if (isInService) {
-    // 서비스 지역
     const label = formatServiceLabel(serviceArea!)
     return (
       <div className="flex items-center gap-3 mb-3">
@@ -81,7 +71,6 @@ const HeaderNotice = ({
     )
   }
 
-  // 비서비스 지역
   return (
     <div className="flex items-center gap-3 mb-4">
       <VanIcon />
@@ -93,16 +82,20 @@ const HeaderNotice = ({
   )
 }
 
-// ── 좌표 → 표시 문자열 헬퍼 (추후 리버스지오코딩 교체 지점)
+// 표시 문자열
 function formatCoords(lat: number, lng: number, d = 6) {
   return `${lat.toFixed(d)}, ${lng.toFixed(d)}`
 }
 function getEndDisplay(end: { lat: number; lng: number } | null) {
   if (!end) return { primary: "좌표 계산 중…", secondary: "좌표 계산 중…" }
   return {
-    primary: formatCoords(end.lat, end.lng, 5),   // 굵은 1줄
-    secondary: formatCoords(end.lat, end.lng, 6), // 보조 1줄
+    primary: formatCoords(end.lat, end.lng, 5),
+    secondary: formatCoords(end.lat, end.lng, 6),
   }
+}
+function getStartDisplay(start: { lat: number; lng: number } | null) {
+  if (!start) return "좌표 계산 중…"
+  return formatCoords(start.lat, start.lng, 5)
 }
 
 const ActionPanel = () => {
@@ -113,40 +106,35 @@ const ActionPanel = () => {
   const setEnd = useDRTStore((s) => s.setEnd)
   const setPhase = useDRTStore((s) => s.setPhase)
 
-  // ── ActionPanel 내 routing 분기만 교체
+  // routing 단계
   if (phase === "routing") {
     const { primary, secondary } = getEndDisplay(end)
+    const canConfirm = !!end
 
     return (
       <div className="w-full h-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
-        {/* 상단 회색띠(handle) 제거, 제목만 표시 */}
         <h3 className="text-[16px] font-semibold tracking-[-0.2px] text-gray-900 mb-4">
           도착지를 확인해 주세요
         </h3>
 
-        {/* 선택된 후보 카드 */}
         <div className="rounded-2xl bg-gray-100/40 px-4 py-3">
           <div className="flex items-center gap-3">
-            <span
-              aria-hidden
-              className="w-3 h-3 rounded-full border-2 border-red-500"
-            />
+            <span aria-hidden className="w-3 h-3 rounded-full border-2 border-red-500" />
             <div className="flex-1">
-              <p className="text-[15px] text-gray-900 leading-[1.1]">
-                {primary}
-              </p>
-              <p className="mt-1 text-[12px] text-gray-500">
-                {secondary}
-              </p>
+              <p className="text-[15px] text-gray-900 leading-[1.1]">{primary}</p>
+              <p className="mt-1 text-[12px] text-gray-500">{secondary}</p>
             </div>
           </div>
         </div>
 
-        {/* 확인 버튼: 패널 하단에 붙도록 mt-auto */}
         <button
           type="button"
-          onClick={() => setPhase("selected")}
-          className="mt-auto h-12 w-full rounded-xl bg-blue-600 text-white text-[15px] font-semibold shadow-[0_4px_12px_rgba(37,99,235,0.35)] active:scale-[0.99]"
+          disabled={!canConfirm}
+          onClick={() => canConfirm && setPhase("selected")}
+          className={`mt-auto h-12 w-full rounded-xl text-[15px] font-semibold active:scale-[0.99] ${canConfirm
+              ? "bg-blue-600 text-white shadow-[0_4px_12px_rgba(37,99,235,0.35)]"
+              : "bg-gray-200 text-gray-400 cursor-not-allowed"
+            }`}
         >
           확인
         </button>
@@ -154,16 +142,51 @@ const ActionPanel = () => {
     )
   }
 
+  // selected 단계
+  if (phase === "selected") {
+    return (
+      <div className="w-full h-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
+        <div className="mb-3">
+          <span className="block text-[15px] font-semibold text-gray-900">
+            경로가 표시되었습니다
+          </span>
+          <span className="mt-1 block text-[12px] text-gray-500">
+            지도를 이동해도 경로와 마커는 고정됩니다.
+          </span>
+        </div>
+
+        <div className="space-y-2 rounded-2xl bg-gray-50 px-4 py-3">
+          <div className="text-sm text-gray-700">
+            <span className="inline-block w-10 text-gray-500">출발</span>
+            <span className="font-medium">{getStartDisplay(start)}</span>
+          </div>
+          <div className="text-sm text-gray-700">
+            <span className="inline-block w-10 text-gray-500">도착</span>
+            <span className="font-medium">
+              {end ? formatCoords(end.lat, end.lng, 5) : "좌표 계산 중…"}
+            </span>
+          </div>
+        </div>
+
+        <button
+          type="button"
+          onClick={() => { setEnd(null); setPhase("idle") }}
+          className="mt-auto h-11 w-full rounded-xl border border-gray-300 text-[14px] font-medium text-gray-700 active:scale-[0.99]"
+        >
+          다시 선택하기
+        </button>
+      </div>
+    )
+  }
+
+  // 기본 단계
   return (
     <div className="w-full h-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
-      {/* 아이콘 + 2줄 헤더 */}
       <HeaderNotice serviceArea={serviceArea} phase={phase} />
 
-      {/* 출발지 / 도착지 입력창 */}
       <div className="border border-blue-700 rounded-xl overflow-hidden">
         {/* 출발지 */}
         <div className="flex items-center px-4 py-3">
-          {/* 네이비 도넛 */}
           <div className="w-3 h-3 rounded-full border-2 border-blue-900 mr-3" />
           <div className="flex-1">
             <p className="text-sm text-gray-700 font-medium">
@@ -172,19 +195,22 @@ const ActionPanel = () => {
           </div>
         </div>
 
-        {/* 가운데 구분선 */}
         <div aria-hidden className="h-px bg-gray-300/30 mx-4 rounded-full scale-y-50" />
 
         {/* 도착지 */}
         <div className="flex items-center px-4 py-3">
-          {/* 빨강 도넛(도착 검색) */}
           <div className="w-3 h-3 rounded-full border-2 border-red-500 mr-3" />
           <input
             id="end"
             type="text"
             placeholder="도착지 검색"
             value={end ? `${end.lat.toFixed(5)}, ${end.lng.toFixed(5)}` : ""}
-            onFocus={() => setPhase("routing")} // 라우팅 모드 진입
+            onFocus={() => {
+              // 이미 routing이면 다시 세팅하지 않기 (무한루프 방지)
+              if (phase !== "routing") {
+                setPhase("routing")
+              }
+            }}
             onChange={(e) => {
               const [latStr, lngStr] = e.target.value.split(",").map((s) => s.trim())
               const lat = parseFloat(latStr)

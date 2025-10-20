@@ -78,7 +78,6 @@ function createCapsuleMarker(text: string, color: string) {
   return { root, labelEl: capsule }
 }
 
-/** 아이콘 DOM 크기에 맞춰 앵커를 정확히 보정 */
 function fixAnchor(marker: naver.maps.Marker, root: HTMLElement) {
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
@@ -92,11 +91,63 @@ function fixAnchor(marker: naver.maps.Marker, root: HTMLElement) {
   })
 }
 
-/** 라벨 텍스트를 바꾸고, 즉시 앵커 재보정 */
 function setLabelAndFix(marker: naver.maps.Marker | null, root: HTMLElement | null, labelEl: HTMLElement | null, text: string) {
   if (!marker || !root || !labelEl) return
   labelEl.textContent = text
   fixAnchor(marker, root)
+}
+
+// ────────────── 더미 라우팅 API (이전 그대로) ──────────────
+type LatLng = { lat: number; lng: number }
+function metersToDeg(lat: number, dLatM: number, dLngM: number): LatLng {
+  const dLat = dLatM / 111_320
+  const dLng = dLngM / (111_320 * Math.cos((lat * Math.PI) / 180))
+  return { lat: lat + dLat, lng: dLngM === 0 ? 0 : dLng }
+}
+function jitterNear(base: LatLng, radiusM = 60): LatLng {
+  const dx = (Math.random() * 2 - 1) * radiusM
+  const dy = (Math.random() * 2 - 1) * radiusM
+  const d = metersToDeg(base.lat, dy, dx)
+  return { lat: base.lat + d.lat - base.lat, lng: base.lng + d.lng }
+}
+function makeCurvedPath(a: LatLng, b: LatLng): LatLng[] {
+  const mid: LatLng = { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 }
+  const ctrl = jitterNear(mid, 120)
+  const steps = 20
+  const pts: LatLng[] = []
+  for (let t = 0; t <= steps; t++) {
+    const u = t / steps
+    const lat =
+      (1 - u) * (1 - u) * a.lat + 2 * (1 - u) * u * ctrl.lat + u * u * b.lat
+    const lng =
+      (1 - u) * (1 - u) * a.lng + 2 * (1 - u) * u * ctrl.lng + u * u * b.lng
+    pts.push({ lat, lng })
+  }
+  return pts
+}
+async function planRouteDummy(payload: {
+  start: LatLng
+  end: LatLng
+  options?: { optimize?: "time" | "distance" }
+}): Promise<{
+  pickup: LatLng
+  dropoff: LatLng
+  summary: { distance_m: number; duration_s: number; polyline: LatLng[] }
+}> {
+  const { start, end } = payload
+  const pickup = jitterNear(start, 80)
+  const dropoff = jitterNear(end, 80)
+  const polyline = makeCurvedPath(pickup, dropoff)
+  const distance_m = getDistanceFromLatLonInM(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng)
+  const duration_s = Math.round(distance_m / 7)
+  await new Promise(r => setTimeout(r, 300))
+  return { pickup, dropoff, summary: { distance_m, duration_s, polyline } }
+}
+
+const EPS = 1e-7
+function isSameLL(a?: { lat: number; lng: number } | null, b?: { lat: number; lng: number } | null) {
+  if (!a || !b) return false
+  return Math.abs(a.lat - b.lat) < EPS && Math.abs(a.lng - b.lng) < EPS
 }
 
 const MapContainer = () => {
@@ -114,24 +165,53 @@ const MapContainer = () => {
 
   const phase = useDRTStore((s) => s.phase)
   const start = useDRTStore((s) => s.start)
+  const end = useDRTStore((s) => s.end)
   const setStart = useDRTStore((s) => s.setStart)
   const setEnd = useDRTStore((s) => s.setEnd)
   const setPhase = useDRTStore((s) => s.setPhase)
   const setServiceArea = useDRTStore((s) => s.setServiceArea)
 
-  // 이벤트 핸들러에서 최신 phase 참조용
+  // 최신 phase
   const phaseRef = useRef(phase)
   useEffect(() => { phaseRef.current = phase }, [phase])
 
-  // ✅ 초기 위치/뷰 & routing 진입 직전 뷰 저장용
+  // prev phase (routing 전이 감지)
+  const prevPhaseRef = useRef(phase)
+  useEffect(() => { prevPhaseRef.current = phase }, [phase])
+
+  // end 최신값 ref (중복 setEnd 방지)
+  const endRef = useRef<typeof end>(end)
+  useEffect(() => { endRef.current = end }, [end])
+
+  // 초기 뷰
   const initialCenterRef = useRef<naver.maps.LatLng | null>(null)
   const initialZoomRef = useRef<number | null>(null)
   const preRoutingZoomRef = useRef<number | null>(null)
-
-  // ✅ 앱 최초 "여기서 출발" 좌표 보관
   const initialStartLLRef = useRef<naver.maps.LatLng | null>(null)
 
-  // ✅ 출발 커밋 헬퍼: 마커/라벨/스토어 동시 반영
+  // 경로/마커 레이어
+  const legStartToPickupRef = useRef<naver.maps.Polyline | null>(null)
+  const legMainRef = useRef<naver.maps.Polyline | null>(null)
+  const legDropoffToEndRef = useRef<naver.maps.Polyline | null>(null)
+  const pickupMarkerRef = useRef<naver.maps.Marker | null>(null)
+  const dropoffMarkerRef = useRef<naver.maps.Marker | null>(null)
+
+  // routing 초기 setEnd 1회 가드
+  const routingInitCommittedRef = useRef(false)
+
+  function clearRouteLayers() {
+    legStartToPickupRef.current?.setMap(null)
+    legMainRef.current?.setMap(null)
+    legDropoffToEndRef.current?.setMap(null)
+    pickupMarkerRef.current?.setMap(null)
+    dropoffMarkerRef.current?.setMap(null)
+    legStartToPickupRef.current = null
+    legMainRef.current = null
+    legDropoffToEndRef.current = null
+    pickupMarkerRef.current = null
+    dropoffMarkerRef.current = null
+  }
+
   function commitStartAt(latlng: naver.maps.LatLng) {
     if (!startMarkerRef.current || !startRootRef.current || !startLabelElRef.current) return
     startMarkerRef.current.setPosition(latlng)
@@ -141,18 +221,24 @@ const MapContainer = () => {
     setStart({ lat, lng })
   }
 
-  // ── 지도 & 출발 마커 초기화 (1회) ──
+  // 안전 가드: 좌표 변경시에만 setEnd
+  function setEndIfChangedLL(ll: naver.maps.LatLng) {
+    const next = { lat: ll.lat(), lng: ll.lng() }
+    const curr = endRef.current
+    if (isSameLL(curr, next)) return
+    setEnd(next)
+  }
+
+  // 지도 초기화
   useEffect(() => {
     if (!window.naver || !mapDivRef.current) return
     const defaultLocation = new window.naver.maps.LatLng(37.4563, 126.8951)
     const map = new window.naver.maps.Map(mapDivRef.current, { center: defaultLocation, zoom: 14 })
     mapRef.current = map
 
-    // 초기 뷰 기록
     initialCenterRef.current = defaultLocation
     initialZoomRef.current = 14
 
-    // 출발 마커
     const startCapsule = createCapsuleMarker("여기서 출발", COLOR_BLUE)
     startRootRef.current = startCapsule.root
     startLabelElRef.current = startCapsule.labelEl
@@ -172,13 +258,12 @@ const MapContainer = () => {
       setServiceArea(isInsideServiceArea(lat, lng))
       setStart({ lat, lng })
     }
-    // 최초 1회 커밋
     commitCenterAsStart()
-    // ✅ 앱 최초 출발 좌표 저장
     initialStartLLRef.current = startMarker.getPosition()!
 
-    // 상호작용 이벤트
+    // 인터랙션(초기/라우팅만 반응, selected에서는 무시)
     const onDrag = window.naver.maps.Event.addListener(map, "drag", () => {
+      if (phaseRef.current === "selected") return
       const center = map.getCenter()
       if (phaseRef.current === "routing") {
         endMarkerRef.current?.setPosition(center)
@@ -189,11 +274,12 @@ const MapContainer = () => {
       }
     })
     const onDragEnd = window.naver.maps.Event.addListener(map, "dragend", () => {
+      if (phaseRef.current === "selected") return
       const center = map.getCenter()
       if (phaseRef.current === "routing") {
         endMarkerRef.current?.setPosition(center)
         setLabelAndFix(endMarkerRef.current, endRootRef.current, endLabelElRef.current, "도착")
-        setEnd({ lat: center.lat(), lng: center.lng() })
+        setEndIfChangedLL(center) // ← 가드 적용
       } else {
         startMarker.setPosition(center)
         setLabelAndFix(startMarker, startRootRef.current, startLabelElRef.current, "여기서 출발")
@@ -203,6 +289,7 @@ const MapContainer = () => {
       }
     })
     const onZoom = window.naver.maps.Event.addListener(map, "zoom_changed", () => {
+      if (phaseRef.current === "selected") return
       const center = map.getCenter()
       if (phaseRef.current === "routing") {
         endMarkerRef.current?.setPosition(center)
@@ -213,6 +300,7 @@ const MapContainer = () => {
       }
     })
     const onIdle = window.naver.maps.Event.addListener(map, "idle", () => {
+      if (phaseRef.current === "selected") return
       if (phaseRef.current === "routing") {
         setLabelAndFix(endMarkerRef.current, endRootRef.current, endLabelElRef.current, "도착")
       } else {
@@ -231,14 +319,23 @@ const MapContainer = () => {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
 
-  // ── phase 변화 처리 (routing 진입/종료) ──
+  // selected 전환 시 start/end 없으면 복귀
+  useEffect(() => {
+    if (phase === "selected" && (!start || !end)) {
+      setPhase("idle")
+    }
+  }, [phase, start, end, setPhase])
+
+  // phase 변화 처리
   useEffect(() => {
     const map = mapRef.current
     if (!map) return
 
     if (phase === "routing") {
-      // 진입 직전 줌 저장(원복용)
-      preRoutingZoomRef.current = map.getZoom()
+      // "다른 단계 → routing" 으로 전이되는 순간에만 초기화
+      if (prevPhaseRef.current !== "routing") {
+        routingInitCommittedRef.current = false
+      }
 
       const st = start ?? (() => {
         const c = map.getCenter()
@@ -247,14 +344,13 @@ const MapContainer = () => {
         return cur
       })()
 
-      // 출발 기준으로 살짝 줌인
       const startLL = new window.naver.maps.LatLng(st.lat, st.lng)
+      preRoutingZoomRef.current = map.getZoom()
       map.setCenter(startLL)
       map.setZoom(15, true)
 
       const centerLL = map.getCenter()
 
-      // 도착 마커 생성/표시
       if (!endMarkerRef.current) {
         const endCapsule = createCapsuleMarker("도착", COLOR_RED_500)
         endRootRef.current = endCapsule.root
@@ -270,41 +366,153 @@ const MapContainer = () => {
       } else {
         endMarkerRef.current.setMap(map)
         endMarkerRef.current.setPosition(centerLL)
-        setLabelAndFix(endMarkerRef.current, endRootRef.current, endLabelElRef.current, "도착")
+        setLabelAndFix(endMarkerRef.current, endRootRef.current!, endLabelElRef.current!, "도착")
       }
 
-      // 현재 중앙을 도착 후보로 커밋
-      setEnd({ lat: centerLL.lat(), lng: centerLL.lng() })
-    } else {
-      // routing 종료 시: 도착 마커 숨김 + 라벨 리셋
+      // 초기 1회만 setEnd
+      if (!routingInitCommittedRef.current) {
+        routingInitCommittedRef.current = true
+        setEndIfChangedLL(centerLL) // ← 가드 적용
+      }
+    } else if (phase === "selected") {
+      // 선택 완료: 도착 마커 보장
+      if (end && endMarkerRef.current) {
+        const endLL = new window.naver.maps.LatLng(end.lat, end.lng)
+        endMarkerRef.current.setMap(map)
+        endMarkerRef.current.setPosition(endLL)
+        setLabelAndFix(endMarkerRef.current, endRootRef.current!, endLabelElRef.current!, "도착")
+      }
+    } else { // idle 등
       if (endMarkerRef.current) endMarkerRef.current.setMap(null)
       if (endLabelElRef.current) endLabelElRef.current.textContent = "도착"
+      clearRouteLayers()
     }
-  }, [phase, start, setStart, setEnd])
+  }, [phase, start]) // ← setEnd로 인한 재실행을 막기 위해 deps 최소화
 
-  // ✅ 뒤로가기(원복) 핸들러 — 출발 마커까지 초기화
-  const handleBackFromRouting = () => {
+  // routing 중 end 변경 시: 동일 좌표면 스킵, 다르면 부드럽게 이동
+  useEffect(() => {
+    const map = mapRef.current
+    if (!map) return
+    if (phase !== "routing" || !end) return
+
+    const center = map.getCenter()
+    const same =
+      Math.abs(center.lat() - end.lat) < EPS &&
+      Math.abs(center.lng() - end.lng) < EPS
+    if (same) return
+
+    const endLL = new window.naver.maps.LatLng(end.lat, end.lng)
+    map.setCenter(endLL)
+    if (map.getZoom() < 15) map.setZoom(15, true)
+  }, [end, phase])
+
+  // selected에서 경로/마커 렌더 (이전 로직 유지)
+  useEffect(() => {
     const map = mapRef.current
     if (!map) return
 
-    // 기준: 앱 최초 출발 좌표(없으면 초기 맵 중심)
+    if (phase !== "selected") {
+      clearRouteLayers()
+      return
+    }
+    if (!start || !end) return
+
+    clearRouteLayers()
+
+      ; (async () => {
+        const { pickup, dropoff, summary } = await planRouteDummy({
+          start, end, options: { optimize: "time" }
+        })
+
+        legStartToPickupRef.current = new window.naver.maps.Polyline({
+          map,
+          path: [
+            new window.naver.maps.LatLng(start.lat, start.lng),
+            new window.naver.maps.LatLng(pickup.lat, pickup.lng),
+          ],
+          strokeColor: "#9ca3af",
+          strokeOpacity: 1,
+          strokeWeight: 4,
+          strokeStyle: "shortdash",
+        })
+
+        legMainRef.current = new window.naver.maps.Polyline({
+          map,
+          path: summary.polyline.map(p => new window.naver.maps.LatLng(p.lat, p.lng)),
+          strokeColor: "#2563eb",
+          strokeOpacity: 1,
+          strokeWeight: 5,
+          strokeStyle: "solid",
+        })
+
+        legDropoffToEndRef.current = new window.naver.maps.Polyline({
+          map,
+          path: [
+            new window.naver.maps.LatLng(dropoff.lat, dropoff.lng),
+            new window.naver.maps.LatLng(end.lat, end.lng),
+          ],
+          strokeColor: "#9ca3af",
+          strokeOpacity: 1,
+          strokeWeight: 4,
+          strokeStyle: "shortdash",
+        })
+
+        const pickupCapsule = createCapsuleMarker("승차", "#374151")
+        const dropoffCapsule = createCapsuleMarker("하차", "#374151")
+
+        pickupMarkerRef.current = new window.naver.maps.Marker({
+          map,
+          position: new window.naver.maps.LatLng(pickup.lat, pickup.lng),
+          icon: { content: pickupCapsule.root, anchor: new window.naver.maps.Point(50, 34) },
+          zIndex: 20,
+        })
+        dropoffMarkerRef.current = new window.naver.maps.Marker({
+          map,
+          position: new window.naver.maps.LatLng(dropoff.lat, dropoff.lng),
+          icon: { content: dropoffCapsule.root, anchor: new window.naver.maps.Point(50, 34) },
+          zIndex: 20,
+        })
+        fixAnchor(pickupMarkerRef.current, pickupCapsule.root)
+        fixAnchor(dropoffMarkerRef.current, dropoffCapsule.root)
+
+        // 도착 마커 보장
+        if (endMarkerRef.current) {
+          const endLL = new window.naver.maps.LatLng(end.lat, end.lng)
+          endMarkerRef.current.setMap(map)
+          endMarkerRef.current.setPosition(endLL)
+          setLabelAndFix(endMarkerRef.current, endRootRef.current!, endLabelElRef.current!, "도착")
+        }
+
+        // 전체 뷰 맞추기
+        const bounds = new window.naver.maps.LatLngBounds()
+          ;[
+            { lat: start.lat, lng: start.lng },
+            pickup,
+            dropoff,
+            { lat: end.lat, lng: end.lng },
+          ].forEach(p => bounds.extend(new window.naver.maps.LatLng(p.lat, p.lng)))
+        map.fitBounds(bounds, { top: 40, right: 40, bottom: 40, left: 40 })
+      })()
+  }, [phase, start, end])
+
+  const handleResetToInitial = () => {
+    const map = mapRef.current
+    if (!map) return
+
+    clearRouteLayers()
+    if (endMarkerRef.current) endMarkerRef.current.setMap(null)
+
+    setEnd(null)
+    setPhase("idle")
+
     const initStart = initialStartLLRef.current
       ?? initialCenterRef.current
       ?? map.getCenter()
 
-    // 1) 도착 후보 초기화/숨김
-    setEnd(null)
-    if (endMarkerRef.current) endMarkerRef.current.setMap(null)
-
-    // 2) phase를 먼저 idle로 돌려 이벤트 분기 안전화
-    setPhase("idle")
-
-    // 3) 줌/센터 원복
     const backZoom = preRoutingZoomRef.current ?? initialZoomRef.current ?? map.getZoom()
     map.setZoom(backZoom, true)
     map.setCenter(initStart)
 
-    // 4) 이동/줌 애니메이션 종료(idle) 후 출발 커밋(덮어쓰기 방지)
     const onceIdle = window.naver.maps.Event.addListener(map, "idle", () => {
       window.naver.maps.Event.removeListener(onceIdle)
       commitStartAt(initStart)
@@ -313,14 +521,12 @@ const MapContainer = () => {
 
   return (
     <div ref={wrapRef} className="relative w-full h-full">
-      {/* 맵 */}
       <div ref={mapDivRef} className="w-full h-full" />
 
-      {/* ⬅️ 동그라미 뒤로가기: routing일 때만 표시 */}
       {phase === "routing" && (
         <button
           type="button"
-          onClick={handleBackFromRouting}
+          onClick={handleResetToInitial}
           className="
             absolute top-3 left-3 z-[1000]
             h-10 w-10 rounded-full bg-white shadow-[0_2px_10px_rgba(0,0,0,0.15)]
@@ -328,9 +534,26 @@ const MapContainer = () => {
           "
           aria-label="뒤로가기"
         >
-          {/* ← 아이콘 */}
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
             <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      )}
+
+      {phase === "selected" && (
+        <button
+          type="button"
+          onClick={handleResetToInitial}
+          className="
+            absolute top-3 left-3 z-[1000]
+            h-10 w-10 rounded-full bg-white shadow-[0_2px_10px_rgba(0,0,0,0.15)]
+            flex items-center justify-center active:scale-[0.98]
+          "
+          aria-label="닫기"
+          title="초기 화면으로"
+        >
+          <svg viewBox="0 0 24 24" width="18" height="18" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M6 6l12 12M18 6L6 18" strokeLinecap="round" />
           </svg>
         </button>
       )}
