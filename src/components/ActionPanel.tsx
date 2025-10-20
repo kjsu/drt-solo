@@ -1,12 +1,7 @@
 import { useDRTStore } from "@/store/drtStore"
 
 const VanIcon = () => (
-  <img
-    src="/icons/van.png"
-    alt=""
-    className="w-[50px] h-[50px] object-contain"
-    draggable={false}
-  />
+  <img src="/icons/van.png" alt="" className="w-[50px] h-[50px] object-contain" draggable={false} />
 )
 
 function formatServiceLabel(raw: string) {
@@ -18,12 +13,16 @@ function formatServiceLabel(raw: string) {
     동안구: "안양시 동안",
   }
   if (MAP[raw]) return MAP[raw]
+
   const cityGu = raw.match(/^(.+?)시\s?(.+?)구$/)
   if (cityGu) return `${cityGu[1]}시 ${cityGu[2]}`
+
   const seoulGu = raw.match(/^서울시\s?(.+?)구$/)
   if (seoulGu) return `서울시 ${seoulGu[1]}`
+
   const onlyGu = raw.match(/^(.+?)구$/)
   if (onlyGu) return `서울시 ${onlyGu[1]}`
+
   const onlyCity = raw.match(/^(.+?)시$/)
   if (onlyCity) return `${onlyCity[0]} ${onlyCity[1]}`
   return raw
@@ -35,9 +34,7 @@ const HeaderNotice = ({ serviceArea, phase }: { serviceArea: string | null; phas
       <div className="flex items-center gap-3 mb-4">
         <VanIcon />
         <div className="leading-[20px]">
-          <span className="block text-[15px] font-semibold text-gray-900">
-            도착지를 확인해주세요
-          </span>
+          <span className="block text-[15px] font-semibold text-gray-900"> 도착지를 확인해주세요 </span>
         </div>
       </div>
     )
@@ -50,12 +47,8 @@ const HeaderNotice = ({ serviceArea, phase }: { serviceArea: string | null; phas
       <div className="flex items-center gap-3 mb-3">
         <VanIcon />
         <div>
-          <span className="block text-[13px] font-medium text-sky-600 leading-[18px]">
-            {label}
-          </span>
-          <span className="block text-[16px] font-semibold text-gray-900">
-            DRT를 호출하세요
-          </span>
+          <span className="block text-[13px] font-medium text-sky-600 leading-[18px]">{label}</span>
+          <span className="block text-[16px] font-semibold text-gray-900"> DRT를 호출하세요 </span>
         </div>
       </div>
     )
@@ -76,13 +69,12 @@ const HeaderNotice = ({ serviceArea, phase }: { serviceArea: string | null; phas
 function formatCoords(lat: number, lng: number, d = 6) {
   return `${lat.toFixed(d)}, ${lng.toFixed(d)}`
 }
+
 function getEndDisplay(end: { lat: number; lng: number } | null) {
   if (!end) return { primary: "좌표 계산 중…", secondary: "좌표 계산 중…" }
-  return {
-    primary: formatCoords(end.lat, end.lng, 5),
-    secondary: formatCoords(end.lat, end.lng, 6),
-  }
+  return { primary: formatCoords(end.lat, end.lng, 5), secondary: formatCoords(end.lat, end.lng, 6) }
 }
+
 function getStartDisplay(start: { lat: number; lng: number } | null) {
   if (!start) return "좌표 계산 중…"
   return formatCoords(start.lat, start.lng, 5)
@@ -93,7 +85,6 @@ const ActionPanel = () => {
   const start = useDRTStore((s) => s.start)
   const end = useDRTStore((s) => s.end)
   const phase = useDRTStore((s) => s.phase)
-  const setEnd = useDRTStore((s) => s.setEnd)
   const setPhase = useDRTStore((s) => s.setPhase)
   const bumpResetKey = useDRTStore((s) => s.bumpResetKey)
 
@@ -138,12 +129,8 @@ const ActionPanel = () => {
     return (
       <div className="w-full h-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
         <div className="mb-3">
-          <span className="block text-[15px] font-semibold text-gray-900">
-            경로가 표시되었습니다
-          </span>
-          <span className="mt-1 block text-[12px] text-gray-500">
-            지도를 이동해도 경로와 마커는 고정됩니다.
-          </span>
+          <span className="block text-[15px] font-semibold text-gray-900"> 경로가 표시되었습니다 </span>
+          <span className="mt-1 block text-[12px] text-gray-500"> 지도를 이동해도 경로와 마커는 고정됩니다. </span>
         </div>
 
         <div className="space-y-2 rounded-2xl bg-gray-50 px-4 py-3">
