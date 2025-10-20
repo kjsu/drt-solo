@@ -388,7 +388,7 @@ const MapContainer = () => {
       const startLL = new window.naver.maps.LatLng(st.lat, st.lng)
       preRoutingZoomRef.current = map.getZoom()
       map.setCenter(startLL)
-      map.setZoom(15, true)
+      map.setZoom(17, true)
 
       const centerLL = map.getCenter()
       if (!endMarkerRef.current) {
@@ -443,7 +443,7 @@ const MapContainer = () => {
     if (same) return
     const endLL = new window.naver.maps.LatLng(end.lat, end.lng)
     map.setCenter(endLL)
-    if (map.getZoom() < 15) map.setZoom(15, true)
+    if (map.getZoom() < 15) map.setZoom(17, true)
   }, [end, phase])
 
   // selected에서 경로/마커 렌더
