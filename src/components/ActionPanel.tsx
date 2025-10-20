@@ -94,11 +94,12 @@ const ActionPanel = () => {
     const canConfirm = !!end
 
     return (
-      <div className="w-full h-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
+      <div className="w-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
         <h3 className="text-[16px] font-semibold tracking-[-0.2px] text-gray-900 mb-4">
           도착지를 확인해 주세요
         </h3>
 
+        {/* 1) 좌표 박스 */}
         <div className="rounded-2xl bg-gray-100/40 px-4 py-3">
           <div className="flex items-center gap-3">
             <span aria-hidden className="w-3 h-3 rounded-full border-2 border-red-500" />
@@ -109,11 +110,12 @@ const ActionPanel = () => {
           </div>
         </div>
 
+        {/* 2) 버튼 — 하단 고정 X, 상단 박스와 동일 여백으로 바로 아래 배치 */}
         <button
           type="button"
           disabled={!canConfirm}
           onClick={() => canConfirm && setPhase("selected")}
-          className={`mt-auto h-12 w-full rounded-xl text-[15px] font-semibold active:scale-[0.99] ${canConfirm
+          className={`mt-4 h-12 w-full rounded-xl text-[15px] font-semibold active:scale-[0.99] ${canConfirm
             ? "bg-blue-600 text-white shadow-[0_4px_12px_rgba(37,99,235,0.35)]"
             : "bg-gray-200 text-gray-400 cursor-not-allowed"
             }`}
@@ -127,12 +129,14 @@ const ActionPanel = () => {
   // selected 단계 (경로 화면)
   if (phase === "selected") {
     return (
-      <div className="w-full h-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
+      <div className="w-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
+        {/* 1) 안내 */}
         <div className="mb-3">
           <span className="block text-[15px] font-semibold text-gray-900"> 경로가 표시되었습니다 </span>
           <span className="mt-1 block text-[12px] text-gray-500"> 지도를 이동해도 경로와 마커는 고정됩니다. </span>
         </div>
 
+        {/* 2) 좌표 박스 */}
         <div className="space-y-2 rounded-2xl bg-gray-50 px-4 py-3">
           <div className="text-sm text-gray-700">
             <span className="inline-block w-10 text-gray-500">출발</span>
@@ -146,11 +150,11 @@ const ActionPanel = () => {
           </div>
         </div>
 
-        {/* ⬇️ X 버튼과 완전히 동일한 초기화 실행 */}
+        {/* 3) 버튼 — 하단 고정 X, 바로 아래 배치 */}
         <button
           type="button"
           onClick={() => bumpResetKey()}
-          className="mt-auto h-11 w-full rounded-xl border border-gray-300 text-[14px] font-medium text-gray-700 active:scale-[0.99]"
+          className="mt-4 h-11 w-full rounded-xl border border-gray-300 text-[14px] font-medium text-gray-700 active:scale-[0.99]"
         >
           다시 선택하기
         </button>
@@ -160,7 +164,7 @@ const ActionPanel = () => {
 
   // 기본 단계
   return (
-    <div className="w-full h-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
+    <div className="w-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
       <HeaderNotice serviceArea={serviceArea} phase={phase} />
 
       <div className="border border-blue-700 rounded-xl overflow-hidden">
