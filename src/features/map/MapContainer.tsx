@@ -105,7 +105,7 @@ function metersToDeg(lat: number, dLatM: number, dLngM: number): LatLng {
   return { lat: lat + dLat, lng: dLngM === 0 ? 0 : dLng }
 }
 // ⬆️ 시각적으로 더 벌어지도록 기본 반경을 키움(기존 60 → 180)
-function jitterNear(base: LatLng, radiusM = 180): LatLng {
+function jitterNear(base: LatLng, radiusM = 360): LatLng {
   const dx = (Math.random() * 2 - 1) * radiusM
   const dy = (Math.random() * 2 - 1) * radiusM
   const d = metersToDeg(base.lat, dy, dx)
@@ -113,7 +113,7 @@ function jitterNear(base: LatLng, radiusM = 180): LatLng {
 }
 function makeCurvedPath(a: LatLng, b: LatLng): LatLng[] {
   const mid: LatLng = { lat: (a.lat + b.lat) / 2, lng: (a.lng + b.lng) / 2 }
-  const ctrl = jitterNear(mid, 240) // 곡률도 조금 과감히
+  const ctrl = jitterNear(mid, 420) // 더 과감하게 벌어지도록
   const steps = 20
   const pts: LatLng[] = []
   for (let t = 0; t <= steps; t++) {
@@ -137,8 +137,8 @@ async function planRouteDummy(payload: {
 }> {
   const { start, end } = payload
   // ⬇️ 승차/하차를 더 떨어뜨림(220m)
-  const pickup = jitterNear(start, 220)
-  const dropoff = jitterNear(end, 220)
+  const pickup = jitterNear(start, 420)
+  const dropoff = jitterNear(end, 420)
   const polyline = makeCurvedPath(pickup, dropoff)
   const distance_m = getDistanceFromLatLonInM(pickup.lat, pickup.lng, dropoff.lat, dropoff.lng)
   const duration_s = Math.round(distance_m / 7)
@@ -229,6 +229,26 @@ const MapContainer = () => {
     const curr = endRef.current
     if (isSameLL(curr, next)) return
     setEnd(next)
+  }
+
+  function ensureStartMarker(map: naver.maps.Map) {
+    if (!startMarkerRef.current) {
+      // 마커가 없다면 새로 만들어 붙임
+      const cap = createCapsuleMarker("여기서 출발", COLOR_BLUE)
+      startRootRef.current = cap.root
+      startLabelElRef.current = cap.labelEl
+      const m = new window.naver.maps.Marker({
+        position: map.getCenter(),
+        map,
+        icon: { content: cap.root, anchor: new window.naver.maps.Point(50, 34) },
+        zIndex: 10,
+      })
+      startMarkerRef.current = m
+      fixAnchor(m, cap.root)
+    } else {
+      // 마커가 있다면 맵에 다시 붙임(혹시 null로 떨어져 있었을 대비)
+      startMarkerRef.current.setMap(map)
+    }
   }
 
   // 지도 초기화
@@ -506,25 +526,42 @@ const MapContainer = () => {
     const map = mapRef.current
     if (!map) return
 
+    // 1) 레이어/도착 마커 정리
     clearRouteLayers()
     if (endMarkerRef.current) endMarkerRef.current.setMap(null)
 
+    // 2) 상태 초기화
     setEnd(null)
     setPhase("idle")
 
-    const initStart = initialStartLLRef.current
-      ?? initialCenterRef.current
-      ?? map.getCenter()
+    // 3) 기준 좌표/줌 계산
+    const initStart =
+      initialStartLLRef.current ??
+      initialCenterRef.current ??
+      map.getCenter()
 
-    const backZoom = preRoutingZoomRef.current ?? initialZoomRef.current ?? map.getZoom()
-    map.setZoom(backZoom, true)
+    const backZoom =
+      preRoutingZoomRef.current ??
+      initialZoomRef.current ??
+      map.getZoom()
+
+    // 4) 시작 마커를 즉시 맵에 붙이고, 위치/라벨/스토어 갱신
+    ensureStartMarker(map)
+    startMarkerRef.current!.setPosition(initStart)
+    setLabelAndFix(
+      startMarkerRef.current!,
+      startRootRef.current!,
+      startLabelElRef.current!,
+      "여기서 출발"
+    )
+    const sLat = initStart.lat()
+    const sLng = initStart.lng()
+    setServiceArea(isInsideServiceArea(sLat, sLng))
+    setStart({ lat: sLat, lng: sLng })
+
+    // 5) 뷰 원복 (idle 의존 X)
     map.setCenter(initStart)
-
-    const onceIdle = window.naver.maps.Event.addListener(map, "idle", () => {
-      window.naver.maps.Event.removeListener(onceIdle)
-      // 초기 화면으로 돌아오면 "여기서 출발" 로 복구
-      commitStartAt(initStart)
-    })
+    map.setZoom(backZoom, true)
   }
 
   // 🔔 resetKey가 바뀌면 X 버튼과 동일 동작 수행

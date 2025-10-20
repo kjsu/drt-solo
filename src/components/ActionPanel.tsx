@@ -197,7 +197,7 @@ const ActionPanel = () => {
             type="text"
             placeholder="도착지 검색"
             value={end ? `${end.lat.toFixed(5)}, ${end.lng.toFixed(5)}` : ""}
-            onFocus={() => { if (phase !== "routing") setPhase("routing") }}
+            onFocus={() => { setPhase("routing") }}
             onChange={(e) => {
               const [latStr, lngStr] = e.target.value.split(",").map((s) => s.trim())
               const lat = parseFloat(latStr)
