@@ -97,6 +97,18 @@ const HeaderNotice = ({
   )
 }
 
+// ── 좌표 → 표시 문자열 헬퍼 (추후 리버스지오코딩 교체 지점)
+function formatCoords(lat: number, lng: number, d = 6) {
+  return `${lat.toFixed(d)}, ${lng.toFixed(d)}`
+}
+function getEndDisplay(end: { lat: number; lng: number } | null) {
+  if (!end) return { primary: "좌표 계산 중…", secondary: "좌표 계산 중…" }
+  return {
+    primary: formatCoords(end.lat, end.lng, 5),   // 굵은 1줄
+    secondary: formatCoords(end.lat, end.lng, 6), // 보조 1줄
+  }
+}
+
 const ActionPanel = () => {
   const serviceArea = useDRTStore((s) => s.serviceArea)
   const start = useDRTStore((s) => s.start)
@@ -105,32 +117,43 @@ const ActionPanel = () => {
   const setEnd = useDRTStore((s) => s.setEnd)
   const setPhase = useDRTStore((s) => s.setPhase)
 
+  // ── ActionPanel 내 routing 분기만 교체
   if (phase === "routing") {
+    const { primary, secondary } = getEndDisplay(end)
+
     return (
       <div className="w-full h-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
-        <HeaderNotice serviceArea={serviceArea} phase={phase} />
+        {/* 상단 회색띠(handle) 제거, 제목만 표시 */}
+        <h3 className="text-[16px] font-semibold tracking-[-0.2px] text-gray-900 mb-4">
+          도착지를 확인해 주세요
+        </h3>
 
-        {/* 도착 좌표 블럭 */}
-        <div className="border border-red-500/60 rounded-xl p-4 bg-red-50/40">
-          <div className="text-xs text-gray-500 mb-1">도착 좌표</div>
-          <div className="text-sm font-medium text-gray-800">
-            {end ? `${end.lat.toFixed(6)}, ${end.lng.toFixed(6)}` : "계산 중..."}
-          </div>
-
-          <div className="flex justify-end mt-4">
-            <button
-              type="button"
-              onClick={() => setPhase("selected")}
-              className="px-4 py-2 text-white bg-blue-700 rounded-lg text-sm font-semibold"
-            >
-              확인
-            </button>
+        {/* 선택된 후보 카드 */}
+        <div className="rounded-2xl bg-gray-100/40 px-4 py-3">
+          <div className="flex items-center gap-3">
+            <span
+              aria-hidden
+              className="w-3 h-3 rounded-full border-2 border-red-500"
+            />
+            <div className="flex-1">
+              <p className="text-[15px] text-gray-900 leading-[1.1]">
+                {primary}
+              </p>
+              <p className="mt-1 text-[12px] text-gray-500">
+                {secondary}
+              </p>
+            </div>
           </div>
         </div>
 
-        <p className="mt-2 text-[12px] text-gray-500">
-          지도를 움직이거나 확대/축소하면 도착 후보가 업데이트됩니다.
-        </p>
+        {/* 확인 버튼: 패널 하단에 붙도록 mt-auto */}
+        <button
+          type="button"
+          onClick={() => setPhase("selected")}
+          className="mt-auto h-12 w-full rounded-xl bg-blue-600 text-white text-[15px] font-semibold shadow-[0_4px_12px_rgba(37,99,235,0.35)] active:scale-[0.99]"
+        >
+          확인
+        </button>
       </div>
     )
   }
