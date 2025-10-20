@@ -64,14 +64,33 @@ const MapContainer = () => {
   const serviceAreaOverlaysRef = useRef<ServiceAreaOverlay[]>([])
 
   // ───────── “무조건 보이는” 고스트 마커 (전역 fixed + all:initial) ─────────
+  function ensureDotsStyle() {
+    if (document.getElementById("drt-dots-style")) return
+    const style = document.createElement("style")
+    style.id = "drt-dots-style"
+    style.textContent = `
+      .drt-dots { display: inline-flex; gap: 6px; align-items: center; }
+      .drt-dots span { opacity: .25; animation: drtDot 900ms infinite ease-in-out; }
+      .drt-dots span:nth-child(2) { animation-delay: .12s; }
+      .drt-dots span:nth-child(3) { animation-delay: .24s; }
+      @keyframes drtDot {
+        0%   { opacity: .25; transform: translateY(0); }
+        35%  { opacity: 1;   transform: translateY(-1px); }
+        100% { opacity: .25; transform: translateY(0); }
+      }
+    `
+    document.head.appendChild(style)
+  }
+
   const ghostStartRef = useRef<HTMLDivElement | null>(null)
   const ghostEndRef = useRef<HTMLDivElement | null>(null)
   const ghostLoopRef = useRef<number | null>(null)
   const draggingRef = useRef(false)
 
   function createHardVisibleGhost(text: string, bg: string) {
+    ensureDotsStyle();
+
     const root = document.createElement("div")
-      // 프로젝트 어떤 CSS의 영향도 받지 않도록 모든 속성 초기화
       ; (root.style as any).all = "initial"
     root.style.position = "fixed"
     root.style.left = "50%"
@@ -82,10 +101,9 @@ const MapContainer = () => {
     root.style.display = "none"
     root.style.filter = "drop-shadow(0 12px 22px rgba(0,0,0,0.22))"
 
-    // 캡슐
     const capsule = document.createElement("div")
       ; (capsule.style as any).all = "initial"
-    capsule.textContent = "· · ·" // 드래그 중 표기
+    capsule.innerHTML = `<span class="drt-dots"><span>·</span><span>·</span><span>·</span></span>`
     capsule.style.display = "inline-flex"
     capsule.style.alignItems = "center"
     capsule.style.justifyContent = "center"
@@ -100,7 +118,6 @@ const MapContainer = () => {
     capsule.style.fontFamily =
       '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic","Helvetica Neue",Arial,sans-serif'
 
-    // 핀 꼬리
     const tail = document.createElement("div")
       ; (tail.style as any).all = "initial"
     tail.style.width = "2px"
@@ -110,7 +127,6 @@ const MapContainer = () => {
     tail.style.background = bg
     tail.style.display = "block"
 
-    // 바닥 그림자 점(항상 검은 원)
     const dot = document.createElement("div")
       ; (dot.style as any).all = "initial"
     dot.style.width = "14px"
@@ -120,7 +136,6 @@ const MapContainer = () => {
     dot.style.margin = "6px auto 0"
     dot.style.filter = "blur(1px)"
 
-    // 수직 배치
     const col = document.createElement("div")
       ; (col.style as any).all = "initial"
     col.style.display = "inline-flex"
@@ -131,7 +146,6 @@ const MapContainer = () => {
     col.appendChild(dot)
 
     root.appendChild(col)
-    // 최상단: document.documentElement 밑에 직접 삽입(Body가 transform 걸려 있어도 안전)
     document.documentElement.appendChild(root)
     return root
   }
