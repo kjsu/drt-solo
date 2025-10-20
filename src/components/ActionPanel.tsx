@@ -1,5 +1,102 @@
 import { useDRTStore } from "@/store/drtStore"
 
+const VanIcon = () => (
+  <div
+    className="w-10 h-10 rounded-xl bg-gray-100 flex items-center justify-center shrink-0
+               shadow-[0_1px_2px_rgba(0,0,0,0.06)_inset,0_1.5px_6px_rgba(0,0,0,0.06)]"
+    aria-hidden
+  >
+    {/* 심플한 밴 아이콘 (inline SVG) */}
+    <svg width="22" height="22" viewBox="0 0 24 24" fill="currentColor" className="text-gray-700">
+      <path d="M3 7.5h10.5c.6 0 1.1.3 1.4.8l2.1 3.2h2.2c.5 0 .8.4.8.8v4.2c0 .5-.4.8-.8.8h-.9a2.75 2.75 0 1 1-5.5 0H9.2a2.75 2.75 0 1 1-5.4 0H3.8c-.4 0-.8-.4-.8-.8V8.3c0-.4.4-.8.8-.8Zm13.6 4-1.6-2.4H13v2.4h3.6ZM7.5 18.9a1.65 1.65 0 1 0 0-3.3 1.65 1.65 0 0 0 0 3.3Zm10.9 0a1.65 1.65 0 1 0 0-3.3 1.65 1.65 0 0 0 0 3.3Z" />
+    </svg>
+  </div>
+)
+
+function formatServiceLabel(raw: string) {
+  // 명시 매핑(원하면 여기만 추가)
+  const MAP: Record<string, string> = {
+    금천구: "서울시 금천",
+    안양: "안양시 안양",
+    안양시: "안양시 안양",
+    만안구: "안양시 만안",
+    동안구: "안양시 동안",
+  }
+  if (MAP[raw]) return MAP[raw]
+
+  // 패턴 매핑
+  // "안양시 동안구" → "안양시 동안"
+  const cityGu = raw.match(/^(.+?)시\s?(.+?)구$/)
+  if (cityGu) return `${cityGu[1]}시 ${cityGu[2]}`
+
+  // "서울시 금천구" → "서울시 금천"
+  const seoulGu = raw.match(/^서울시\s?(.+?)구$/)
+  if (seoulGu) return `서울시 ${seoulGu[1]}`
+
+  // "금천구" → "서울시 금천" (도시 정보 없는 '구'면 서울시로 보정)
+  const onlyGu = raw.match(/^(.+?)구$/)
+  if (onlyGu) return `서울시 ${onlyGu[1]}`
+
+  // "군포시" → "군포시 군포" (스샷과 같은 스타일)
+  const onlyCity = raw.match(/^(.+?)시$/)
+  if (onlyCity) return `${onlyCity[0]} ${onlyCity[1]}`
+
+  return raw
+}
+
+const HeaderNotice = ({
+  serviceArea,
+  phase,
+}: {
+  serviceArea: string | null
+  phase: string
+}) => {
+  // routing 단계는 기존 문구 유지
+  if (phase === "routing") {
+    return (
+      <div className="flex items-center gap-3 mb-4">
+        <VanIcon />
+        <div className="leading-[20px]">
+          <span className="block text-[15px] font-semibold text-gray-900">
+            도착지를 확인해주세요
+          </span>
+        </div>
+      </div>
+    )
+  }
+
+  const isInService = !!serviceArea
+
+  if (isInService) {
+    // 서비스 지역
+    const label = formatServiceLabel(serviceArea!)
+    return (
+      <div className="flex items-center gap-3 mb-3">
+        <VanIcon />
+        <div>
+          <span className="block text-[14px] text-sky-600 leading-[18px]">
+            {label}
+          </span>
+          <span className="block text-[16px] font-semibold text-gray-900">
+            DRT를 호출하세요
+          </span>
+        </div>
+      </div>
+    )
+  }
+
+  // 비서비스 지역
+  return (
+    <div className="flex items-center gap-3 mb-4">
+      <VanIcon />
+      <div className="leading-[20px]">
+        <span className="block text-[16px] font-semibold text-gray-900">가까운 서비스 지역에서</span>
+        <span className="block text-[16px] font-semibold text-gray-900">DRT를 호출해 보세요</span>
+      </div>
+    </div>
+  )
+}
+
 const ActionPanel = () => {
   const serviceArea = useDRTStore((s) => s.serviceArea)
   const start = useDRTStore((s) => s.start)
@@ -8,18 +105,10 @@ const ActionPanel = () => {
   const setEnd = useDRTStore((s) => s.setEnd)
   const setPhase = useDRTStore((s) => s.setPhase)
 
-  const renderMessage = () => {
-    if (phase === "routing") return "도착지를 확인해주세요"
-    if (serviceArea === null) return "가까운 서비스 지역에서 DRT를 호출해 보세요"
-    return `${serviceArea} 지역에서 DRT를 호출해 보세요`
-  }
-
   if (phase === "routing") {
     return (
       <div className="w-full h-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
-        <p className="text-center text-[15px] font-medium text-gray-800 mb-4">
-          {renderMessage()}
-        </p>
+        <HeaderNotice serviceArea={serviceArea} phase={phase} />
 
         {/* 도착 좌표 블럭 */}
         <div className="border border-red-500/60 rounded-xl p-4 bg-red-50/40">
@@ -31,7 +120,7 @@ const ActionPanel = () => {
           <div className="flex justify-end mt-4">
             <button
               type="button"
-              onClick={() => setPhase("selected")} // 필요 시 moving 등 다음 단계로
+              onClick={() => setPhase("selected")}
               className="px-4 py-2 text-white bg-blue-700 rounded-lg text-sm font-semibold"
             >
               확인
@@ -48,10 +137,8 @@ const ActionPanel = () => {
 
   return (
     <div className="w-full h-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
-      {/* 안내 문구 */}
-      <p className="text-center text-[15px] font-medium text-gray-800 mb-5">
-        {renderMessage()}
-      </p>
+      {/* 아이콘 + 2줄 헤더 */}
+      <HeaderNotice serviceArea={serviceArea} phase={phase} />
 
       {/* 출발지 / 도착지 입력창 */}
       <div className="border border-blue-700 rounded-xl overflow-hidden">
@@ -78,10 +165,7 @@ const ActionPanel = () => {
             type="text"
             placeholder="도착지 검색"
             value={end ? `${end.lat.toFixed(5)}, ${end.lng.toFixed(5)}` : ""}
-            onFocus={() => {
-              // 라우팅 모드 진입 → MapContainer가 도착 마커 생성/줌인 수행
-              setPhase("routing")
-            }}
+            onFocus={() => setPhase("routing")} // 라우팅 모드 진입
             onChange={(e) => {
               const [latStr, lngStr] = e.target.value.split(",").map((s) => s.trim())
               const lat = parseFloat(latStr)
