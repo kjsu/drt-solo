@@ -69,7 +69,7 @@ function createCapsuleMarker(text: string, color: string) {
   tail.style.width = "2px"
   tail.style.height = "16px"
   tail.style.background = color
-  tail.style.marginTop = "-1px" // 캡슐과 딱 붙게
+  tail.style.marginTop = "-1px"
   tail.style.borderRadius = "1px"
 
   root.appendChild(capsule)
@@ -80,14 +80,13 @@ function createCapsuleMarker(text: string, color: string) {
 
 /** 아이콘 DOM 크기에 맞춰 앵커를 정확히 보정 */
 function fixAnchor(marker: naver.maps.Marker, root: HTMLElement) {
-  // 레이아웃이 안정된 2 프레임 후 앵커 재설정
   requestAnimationFrame(() => {
     requestAnimationFrame(() => {
       const w = root.offsetWidth || 100
       const h = root.offsetHeight || 40
       marker.setIcon({
         content: root,
-        anchor: new window.naver.maps.Point(w / 2, h), // 하단 중앙(꼬리 끝)이 기준점
+        anchor: new window.naver.maps.Point(w / 2, h),
       })
     })
   })
@@ -101,6 +100,7 @@ function setLabelAndFix(marker: naver.maps.Marker | null, root: HTMLElement | nu
 }
 
 const MapContainer = () => {
+  const wrapRef = useRef<HTMLDivElement>(null)
   const mapDivRef = useRef<HTMLDivElement>(null)
   const mapRef = useRef<naver.maps.Map | null>(null)
 
@@ -116,11 +116,30 @@ const MapContainer = () => {
   const start = useDRTStore((s) => s.start)
   const setStart = useDRTStore((s) => s.setStart)
   const setEnd = useDRTStore((s) => s.setEnd)
+  const setPhase = useDRTStore((s) => s.setPhase)
   const setServiceArea = useDRTStore((s) => s.setServiceArea)
 
   // 이벤트 핸들러에서 최신 phase 참조용
   const phaseRef = useRef(phase)
   useEffect(() => { phaseRef.current = phase }, [phase])
+
+  // ✅ 초기 위치/뷰 & routing 진입 직전 뷰 저장용
+  const initialCenterRef = useRef<naver.maps.LatLng | null>(null)
+  const initialZoomRef = useRef<number | null>(null)
+  const preRoutingZoomRef = useRef<number | null>(null)
+
+  // ✅ 앱 최초 "여기서 출발" 좌표 보관
+  const initialStartLLRef = useRef<naver.maps.LatLng | null>(null)
+
+  // ✅ 출발 커밋 헬퍼: 마커/라벨/스토어 동시 반영
+  function commitStartAt(latlng: naver.maps.LatLng) {
+    if (!startMarkerRef.current || !startRootRef.current || !startLabelElRef.current) return
+    startMarkerRef.current.setPosition(latlng)
+    setLabelAndFix(startMarkerRef.current, startRootRef.current, startLabelElRef.current, "여기서 출발")
+    const lat = latlng.lat(), lng = latlng.lng()
+    setServiceArea(isInsideServiceArea(lat, lng))
+    setStart({ lat, lng })
+  }
 
   // ── 지도 & 출발 마커 초기화 (1회) ──
   useEffect(() => {
@@ -128,6 +147,10 @@ const MapContainer = () => {
     const defaultLocation = new window.naver.maps.LatLng(37.4563, 126.8951)
     const map = new window.naver.maps.Map(mapDivRef.current, { center: defaultLocation, zoom: 14 })
     mapRef.current = map
+
+    // 초기 뷰 기록
+    initialCenterRef.current = defaultLocation
+    initialZoomRef.current = 14
 
     // 출발 마커
     const startCapsule = createCapsuleMarker("여기서 출발", COLOR_BLUE)
@@ -151,16 +174,16 @@ const MapContainer = () => {
     }
     // 최초 1회 커밋
     commitCenterAsStart()
+    // ✅ 앱 최초 출발 좌표 저장
+    initialStartLLRef.current = startMarker.getPosition()!
 
-    // ── 상호작용 이벤트: phase에 따라 중앙을 따라다니는 주체 스위칭 ──
+    // 상호작용 이벤트
     const onDrag = window.naver.maps.Event.addListener(map, "drag", () => {
       const center = map.getCenter()
       if (phaseRef.current === "routing") {
-        // 도착 마커가 중앙을 따라감 + 라벨 로딩
         endMarkerRef.current?.setPosition(center)
         setLabelAndFix(endMarkerRef.current, endRootRef.current, endLabelElRef.current, "· · ·")
       } else {
-        // 출발 마커가 중앙을 따라감 + 라벨 로딩
         startMarker.setPosition(center)
         setLabelAndFix(startMarker, startRootRef.current, startLabelElRef.current, "· · ·")
       }
@@ -214,6 +237,9 @@ const MapContainer = () => {
     if (!map) return
 
     if (phase === "routing") {
+      // 진입 직전 줌 저장(원복용)
+      preRoutingZoomRef.current = map.getZoom()
+
       const st = start ?? (() => {
         const c = map.getCenter()
         const cur = { lat: c.lat(), lng: c.lng() }
@@ -221,15 +247,14 @@ const MapContainer = () => {
         return cur
       })()
 
-      // 줌 15로 (덜 가까운 레벨)
+      // 출발 기준으로 살짝 줌인
       const startLL = new window.naver.maps.LatLng(st.lat, st.lng)
       map.setCenter(startLL)
       map.setZoom(15, true)
 
-      // 중앙 위치
       const centerLL = map.getCenter()
 
-      // 도착 마커를 중앙에 생성/표시 (출발과 동일 앵커 로직)
+      // 도착 마커 생성/표시
       if (!endMarkerRef.current) {
         const endCapsule = createCapsuleMarker("도착", COLOR_RED_500)
         endRootRef.current = endCapsule.root
@@ -251,13 +276,66 @@ const MapContainer = () => {
       // 현재 중앙을 도착 후보로 커밋
       setEnd({ lat: centerLL.lat(), lng: centerLL.lng() })
     } else {
-      // routing 종료 시: 필요하면 도착 마커 숨김
+      // routing 종료 시: 도착 마커 숨김 + 라벨 리셋
       if (endMarkerRef.current) endMarkerRef.current.setMap(null)
       if (endLabelElRef.current) endLabelElRef.current.textContent = "도착"
     }
   }, [phase, start, setStart, setEnd])
 
-  return <div ref={mapDivRef} className="w-full h-full" />
+  // ✅ 뒤로가기(원복) 핸들러 — 출발 마커까지 초기화
+  const handleBackFromRouting = () => {
+    const map = mapRef.current
+    if (!map) return
+
+    // 기준: 앱 최초 출발 좌표(없으면 초기 맵 중심)
+    const initStart = initialStartLLRef.current
+      ?? initialCenterRef.current
+      ?? map.getCenter()
+
+    // 1) 도착 후보 초기화/숨김
+    setEnd(null)
+    if (endMarkerRef.current) endMarkerRef.current.setMap(null)
+
+    // 2) phase를 먼저 idle로 돌려 이벤트 분기 안전화
+    setPhase("idle")
+
+    // 3) 줌/센터 원복
+    const backZoom = preRoutingZoomRef.current ?? initialZoomRef.current ?? map.getZoom()
+    map.setZoom(backZoom, true)
+    map.setCenter(initStart)
+
+    // 4) 이동/줌 애니메이션 종료(idle) 후 출발 커밋(덮어쓰기 방지)
+    const onceIdle = window.naver.maps.Event.addListener(map, "idle", () => {
+      window.naver.maps.Event.removeListener(onceIdle)
+      commitStartAt(initStart)
+    })
+  }
+
+  return (
+    <div ref={wrapRef} className="relative w-full h-full">
+      {/* 맵 */}
+      <div ref={mapDivRef} className="w-full h-full" />
+
+      {/* ⬅️ 동그라미 뒤로가기: routing일 때만 표시 */}
+      {phase === "routing" && (
+        <button
+          type="button"
+          onClick={handleBackFromRouting}
+          className="
+            absolute top-3 left-3 z-[1000]
+            h-10 w-10 rounded-full bg-white shadow-[0_2px_10px_rgba(0,0,0,0.15)]
+            flex items-center justify-center active:scale-[0.98]
+          "
+          aria-label="뒤로가기"
+        >
+          {/* ← 아이콘 */}
+          <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
+            <path d="M15 18l-6-6 6-6" strokeLinecap="round" strokeLinejoin="round" />
+          </svg>
+        </button>
+      )}
+    </div>
+  )
 }
 
 export default MapContainer
