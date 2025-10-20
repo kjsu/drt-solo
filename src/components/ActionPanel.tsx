@@ -175,7 +175,7 @@ const ActionPanel = () => {
   if (phase === "routing") {
     const canConfirm = !!end
     return (
-      <div className="w-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
+      <div className="w-full h-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
         <h3 className="text-[16px] font-semibold tracking-[-0.2px] text-gray-900 mb-4">
           도착지를 확인해 주세요
         </h3>
@@ -214,7 +214,7 @@ const ActionPanel = () => {
   // selected 단계 (레이아웃 그대로, 표시값만 주소 짧은형)
   if (phase === "selected") {
     return (
-      <div className="w-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
+      <div className="w-full h-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
         <div className="mb-3">
           <span className="block text-[15px] font-semibold text-gray-900"> 경로가 표시되었습니다 </span>
           <span className="mt-1 block text-[12px] text-gray-500"> 지도를 이동해도 경로와 마커는 고정됩니다. </span>
@@ -246,7 +246,7 @@ const ActionPanel = () => {
 
   // 기본 단계 (레이아웃 그대로, 값만 주소 짧은형)
   return (
-    <div className="w-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
+    <div className="w-full h-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col">
       <HeaderNotice serviceArea={serviceArea} phase={phase} />
 
       <div className="border border-blue-700 rounded-xl overflow-hidden">
