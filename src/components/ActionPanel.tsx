@@ -136,7 +136,7 @@ const HeaderNotice = ({ serviceArea, phase }: { serviceArea: string | null; phas
   if (isInService) {
     const label = formatServiceLabel(serviceArea!)
     return (
-      <div className="flex items-center gap-3 mb-3">
+      <div className="flex items-center gap-3 mb-4">
         <VanIcon />
         <div>
           <span className="block text-[13px] font-medium text-sky-600 leading-[18px]">{label}</span>
