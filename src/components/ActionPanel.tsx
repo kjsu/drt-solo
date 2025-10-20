@@ -308,16 +308,16 @@ const ActionPanel = () => {
         className="w-full h-full bg-white rounded-t-2xl shadow-[0_-2px_8px_rgba(0,0,0,0.08)] px-5 py-4 flex flex-col"
       >
         <div className="mb-3">
-          <span className="block text-[15px] font-semibold text-gray-900"> 경로가 표시되었습니다 </span>
+          <span className="block text-[15px] font-semibold text-gray-900"> 경로 안내를 시작합니다 </span>
         </div>
 
         <div className="space-y-2 rounded-2xl bg-gray-50 px-4 py-3">
           <div className="text-sm text-gray-700">
-            <span className="inline-block w-10 text-gray-500">출발</span>
+            <span className="inline-block w-13 text-gray-500">출발지: </span>
             <span className="font-medium">{start ? startAddr.shortLabel : "주소 불러오는 중…"}</span>
           </div>
           <div className="text-sm text-gray-700">
-            <span className="inline-block w-10 text-gray-500">도착</span>
+            <span className="inline-block w-13 text-gray-500">도착지: </span>
             <span className="font-medium">{end ? endAddr.shortLabel : "주소 불러오는 중…"}</span>
           </div>
         </div>
@@ -327,7 +327,7 @@ const ActionPanel = () => {
           onClick={() => bumpResetKey()}
           className="mt-4 h-11 w-full rounded-xl border border-gray-300 text-[14px] font-medium text-gray-700 active:scale-[0.99]"
         >
-          다시 선택하기
+          다시 경로 선택하기
         </button>
       </div>
     )
