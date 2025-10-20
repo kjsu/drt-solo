@@ -3,6 +3,7 @@ import react from '@vitejs/plugin-react-swc'
 import path from 'path'
 
 export default defineConfig({
+  base: "/drt-solo-demo/",
   plugins: [react()],
   css: {
     postcss: './postcss.config.js',
