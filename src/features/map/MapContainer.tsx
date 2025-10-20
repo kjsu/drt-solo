@@ -1,13 +1,10 @@
+// src/features/map/MapContainer.tsx
 import { useEffect, useRef } from "react"
 import { useDRTStore } from "@/store/drtStore"
 import { drawServiceAreas, clearServiceAreas, ServiceAreaOverlay } from "@/features/map/serviceAreaOverlay"
 
 // utils
-import {
-  isInsideServiceArea,
-  EPS,
-  isSameLL,
-} from "@/utils/geo"
+import { isInsideServiceArea, EPS, isSameLL } from "@/utils/geo"
 import {
   COLOR_BLUE,
   COLOR_RED_500,
@@ -64,8 +61,117 @@ const MapContainer = () => {
   const pickupMarkerRef = useRef<naver.maps.Marker | null>(null)
   const dropoffMarkerRef = useRef<naver.maps.Marker | null>(null)
 
-  // routing 초기 setEnd 1회 가드
-  const routingInitCommittedRef = useRef(false)
+  const serviceAreaOverlaysRef = useRef<ServiceAreaOverlay[]>([])
+
+  // ───────── “무조건 보이는” 고스트 마커 (전역 fixed + all:initial) ─────────
+  const ghostStartRef = useRef<HTMLDivElement | null>(null)
+  const ghostEndRef = useRef<HTMLDivElement | null>(null)
+  const ghostLoopRef = useRef<number | null>(null)
+  const draggingRef = useRef(false)
+
+  function createHardVisibleGhost(text: string, bg: string) {
+    const root = document.createElement("div")
+      // 프로젝트 어떤 CSS의 영향도 받지 않도록 모든 속성 초기화
+      ; (root.style as any).all = "initial"
+    root.style.position = "fixed"
+    root.style.left = "50%"
+    root.style.top = "50%"
+    root.style.transform = "translate(-50%, -100%) translateZ(0)"
+    root.style.zIndex = "2147483647"
+    root.style.pointerEvents = "none"
+    root.style.display = "none"
+    root.style.filter = "drop-shadow(0 12px 22px rgba(0,0,0,0.22))"
+
+    // 캡슐
+    const capsule = document.createElement("div")
+      ; (capsule.style as any).all = "initial"
+    capsule.textContent = "· · ·" // 드래그 중 표기
+    capsule.style.display = "inline-flex"
+    capsule.style.alignItems = "center"
+    capsule.style.justifyContent = "center"
+    capsule.style.padding = "8px 14px"
+    capsule.style.fontSize = "12px"
+    capsule.style.fontWeight = "700"
+    capsule.style.lineHeight = "1"
+    capsule.style.color = "#fff"
+    capsule.style.background = bg
+    capsule.style.borderRadius = "9999px"
+    capsule.style.boxShadow = "0 6px 14px rgba(0,0,0,0.16)"
+    capsule.style.fontFamily =
+      '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic","Helvetica Neue",Arial,sans-serif'
+
+    // 핀 꼬리
+    const tail = document.createElement("div")
+      ; (tail.style as any).all = "initial"
+    tail.style.width = "2px"
+    tail.style.height = "16px"
+    tail.style.marginTop = "-1px"
+    tail.style.borderRadius = "1px"
+    tail.style.background = bg
+    tail.style.display = "block"
+
+    // 바닥 그림자 점(항상 검은 원)
+    const dot = document.createElement("div")
+      ; (dot.style as any).all = "initial"
+    dot.style.width = "14px"
+    dot.style.height = "14px"
+    dot.style.borderRadius = "9999px"
+    dot.style.background = "rgba(0,0,0,0.35)"
+    dot.style.margin = "6px auto 0"
+    dot.style.filter = "blur(1px)"
+
+    // 수직 배치
+    const col = document.createElement("div")
+      ; (col.style as any).all = "initial"
+    col.style.display = "inline-flex"
+    col.style.flexDirection = "column"
+    col.style.alignItems = "center"
+    col.appendChild(capsule)
+    col.appendChild(tail)
+    col.appendChild(dot)
+
+    root.appendChild(col)
+    // 최상단: document.documentElement 밑에 직접 삽입(Body가 transform 걸려 있어도 안전)
+    document.documentElement.appendChild(root)
+    return root
+  }
+
+  function ensureGhosts() {
+    if (!ghostStartRef.current) ghostStartRef.current = createHardVisibleGhost("여기서 출발", COLOR_BLUE)
+    if (!ghostEndRef.current) ghostEndRef.current = createHardVisibleGhost("도착", COLOR_RED_500)
+  }
+  function placeGhostOverMapCenter(el: HTMLElement | null) {
+    if (!el || !mapDivRef.current) return
+    const r = mapDivRef.current.getBoundingClientRect()
+    const cx = r.left + r.width / 2
+    const cy = r.top + r.height / 2
+    el.style.left = `${Math.round(cx)}px`
+    el.style.top = `${Math.round(cy)}px`
+  }
+  function showGhost(kind: "start" | "end") {
+    ensureGhosts()
+    const el = kind === "start" ? ghostStartRef.current : ghostEndRef.current
+    if (!el) return
+    el.style.display = "block"
+    placeGhostOverMapCenter(el)
+    if (ghostLoopRef.current == null) {
+      const tick = () => {
+        ghostLoopRef.current = null
+        if (!draggingRef.current) return
+        placeGhostOverMapCenter(el)
+        ghostLoopRef.current = requestAnimationFrame(tick)
+      }
+      ghostLoopRef.current = requestAnimationFrame(tick)
+    }
+  }
+  function hideGhost(kind: "start" | "end") {
+    const el = kind === "start" ? ghostStartRef.current : ghostEndRef.current
+    if (el) el.style.display = "none"
+    if (ghostLoopRef.current != null) {
+      cancelAnimationFrame(ghostLoopRef.current)
+      ghostLoopRef.current = null
+    }
+  }
 
   function clearRouteLayers() {
     legStartToPickupRef.current?.setMap(null)
@@ -80,15 +186,6 @@ const MapContainer = () => {
     dropoffMarkerRef.current = null
   }
 
-  function commitStartAt(latlng: naver.maps.LatLng) {
-    if (!startMarkerRef.current || !startRootRef.current || !startLabelElRef.current) return
-    startMarkerRef.current.setPosition(latlng)
-    setLabelAndFix(startMarkerRef.current, startRootRef.current, startLabelElRef.current, "여기서 출발")
-    const lat = latlng.lat(), lng = latlng.lng()
-    setServiceArea(isInsideServiceArea(lat, lng))
-    setStart({ lat, lng })
-  }
-
   function setEndIfChangedLL(ll: naver.maps.LatLng) {
     const next = { lat: ll.lat(), lng: ll.lng() }
     const curr = endRef.current
@@ -98,7 +195,6 @@ const MapContainer = () => {
 
   function ensureStartMarker(map: naver.maps.Map) {
     if (!startMarkerRef.current) {
-      // 마커가 없다면 새로 만들어 붙임
       const cap = createCapsuleMarker("여기서 출발", COLOR_BLUE)
       startRootRef.current = cap.root
       startLabelElRef.current = cap.labelEl
@@ -111,12 +207,9 @@ const MapContainer = () => {
       startMarkerRef.current = m
       fixAnchor(m, cap.root)
     } else {
-      // 마커가 있다면 맵에 다시 붙임(혹시 null로 떨어져 있었을 대비)
       startMarkerRef.current.setMap(map)
     }
   }
-
-  const serviceAreaOverlaysRef = useRef<ServiceAreaOverlay[]>([])
 
   // 지도 초기화
   useEffect(() => {
@@ -132,7 +225,7 @@ const MapContainer = () => {
     initialCenterRef.current = defaultLocation
     initialZoomRef.current = 14
 
-    // 서비스 지역 반투명 오버레이 그리기
+    // 서비스 영역 오버레이
     serviceAreaOverlaysRef.current = drawServiceAreas(map, {
       strokeColor: "#2563eb",
       strokeOpacity: 0.9,
@@ -142,6 +235,7 @@ const MapContainer = () => {
       zIndex: 1,
     })
 
+    // 시작 마커
     const startCapsule = createCapsuleMarker("여기서 출발", COLOR_BLUE)
     startRootRef.current = startCapsule.root
     startLabelElRef.current = startCapsule.labelEl
@@ -154,6 +248,7 @@ const MapContainer = () => {
     startMarkerRef.current = startMarker
     fixAnchor(startMarker, startCapsule.root)
 
+    // 초기 스토어 커밋
     const commitCenterAsStart = () => {
       const c = map.getCenter()
       startMarker.setPosition(c)
@@ -164,49 +259,72 @@ const MapContainer = () => {
     commitCenterAsStart()
     initialStartLLRef.current = startMarker.getPosition()!
 
-    // 인터랙션(초기/라우팅만 반응, selected에서는 무시)
-    const onDrag = window.naver.maps.Event.addListener(map, "drag", () => {
+    // ───────── 드래그: 실제 마커 숨기고 고스트만 표시 ─────────
+    const onDragStart = window.naver.maps.Event.addListener(map, "dragstart", () => {
       if (phaseRef.current === "selected") return
-      const center = map.getCenter()
+      draggingRef.current = true
       if (phaseRef.current === "routing") {
-        endMarkerRef.current?.setPosition(center)
-        setLabelAndFix(endMarkerRef.current, endRootRef.current, endLabelElRef.current, "· · ·")
+        endMarkerRef.current?.setMap(null)     // 실제 마커 숨김
+        showGhost("end")                       // 고스트 표시(전역 fixed)
       } else {
-        startMarker.setPosition(center)
-        setLabelAndFix(startMarker, startRootRef.current, startLabelElRef.current, "· · ·")
+        startMarker.setMap(null)
+        showGhost("start")
       }
     })
-
+    const onDrag = window.naver.maps.Event.addListener(map, "drag", () => {
+      // 고스트는 rAF 루프가 mapDiv 중앙을 계속 추적 → 여기선 아무것도 안 함
+    })
     const onDragEnd = window.naver.maps.Event.addListener(map, "dragend", () => {
       if (phaseRef.current === "selected") return
+      draggingRef.current = false
       const center = map.getCenter()
       if (phaseRef.current === "routing") {
-        endMarkerRef.current?.setPosition(center)
-        setLabelAndFix(endMarkerRef.current, endRootRef.current, endLabelElRef.current, "도착")
+        hideGhost("end")
+        if (!endMarkerRef.current) {
+          const endCap = createCapsuleMarker("도착", COLOR_RED_500)
+          endRootRef.current = endCap.root
+          endLabelElRef.current = endCap.labelEl
+          const em = new window.naver.maps.Marker({
+            position: center,
+            map,
+            icon: { content: endCap.root, anchor: new window.naver.maps.Point(50, 34) },
+            zIndex: 11,
+          })
+          endMarkerRef.current = em
+          fixAnchor(em, endCap.root)
+        } else {
+          endMarkerRef.current.setMap(map)
+          endMarkerRef.current.setPosition(center)
+          setLabelAndFix(endMarkerRef.current, endRootRef.current!, endLabelElRef.current!, "도착")
+        }
         setEndIfChangedLL(center)
       } else {
+        hideGhost("start")
+        startMarker.setMap(map)
         startMarker.setPosition(center)
-        setLabelAndFix(startMarker, startRootRef.current, startLabelElRef.current, "여기서 출발")
+        setLabelAndFix(startMarker, startRootRef.current!, startLabelElRef.current!, "여기서 출발")
         const lat = center.lat(), lng = center.lng()
         setServiceArea(isInsideServiceArea(lat, lng))
         setStart({ lat, lng })
       }
     })
 
+    // 줌 변경: 드래그 아닐 때만 보정
     const onZoom = window.naver.maps.Event.addListener(map, "zoom_changed", () => {
       if (phaseRef.current === "selected") return
+      if (draggingRef.current) return
       const center = map.getCenter()
       if (phaseRef.current === "routing") {
         endMarkerRef.current?.setPosition(center)
-        setLabelAndFix(endMarkerRef.current, endRootRef.current, endLabelElRef.current, "· · ·")
       } else {
         startMarker.setPosition(center)
-        setLabelAndFix(startMarker, startRootRef.current, startLabelElRef.current, "· · ·")
       }
     })
 
+    // idle: 드래그 아닐 때만 라벨 복구
     const onIdle = window.naver.maps.Event.addListener(map, "idle", () => {
       if (phaseRef.current === "selected") return
+      if (draggingRef.current) return
       if (phaseRef.current === "routing") {
         setLabelAndFix(endMarkerRef.current, endRootRef.current, endLabelElRef.current, "도착")
       } else {
@@ -215,6 +333,7 @@ const MapContainer = () => {
     })
 
     return () => {
+      window.naver.maps.Event.removeListener(onDragStart)
       window.naver.maps.Event.removeListener(onDrag)
       window.naver.maps.Event.removeListener(onDragEnd)
       window.naver.maps.Event.removeListener(onZoom)
@@ -222,6 +341,12 @@ const MapContainer = () => {
       startMarkerRef.current?.setMap(null)
       endMarkerRef.current?.setMap(null)
       clearServiceAreas(serviceAreaOverlaysRef.current)
+      // 고스트 정리
+      ghostStartRef.current?.remove()
+      ghostEndRef.current?.remove()
+      if (ghostLoopRef.current != null) cancelAnimationFrame(ghostLoopRef.current)
+      ghostLoopRef.current = null
+      draggingRef.current = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [])
@@ -239,10 +364,6 @@ const MapContainer = () => {
     if (!map) return
 
     if (phase === "routing") {
-      if (prevPhaseRef.current !== "routing") {
-        routingInitCommittedRef.current = false
-      }
-
       const st = start ?? (() => {
         const c = map.getCenter()
         const cur = { lat: c.lat(), lng: c.lng() }
@@ -274,12 +395,8 @@ const MapContainer = () => {
         setLabelAndFix(endMarkerRef.current, endRootRef.current!, endLabelElRef.current!, "도착")
       }
 
-      if (!routingInitCommittedRef.current) {
-        routingInitCommittedRef.current = true
-        setEndIfChangedLL(centerLL)
-      }
+      setEndIfChangedLL(centerLL)
     } else if (phase === "selected") {
-      // 도착 마커 보장 + 시작 마커 라벨을 "출발"로 변경
       if (end && endMarkerRef.current) {
         const endLL = new window.naver.maps.LatLng(end.lat, end.lng)
         endMarkerRef.current.setMap(map)
@@ -292,12 +409,14 @@ const MapContainer = () => {
     } else {
       // idle
       if (endMarkerRef.current) endMarkerRef.current.setMap(null)
-      if (endLabelElRef.current) endLabelElRef.current.textContent = "도착" // 초기 화면 텍스트 복구
+      if (endLabelElRef.current) endLabelElRef.current.textContent = "도착"
       if (startMarkerRef.current && startRootRef.current && startLabelElRef.current) {
         setLabelAndFix(startMarkerRef.current, startRootRef.current, startLabelElRef.current, "여기서 출발")
       }
       clearRouteLayers()
     }
+
+    prevPhaseRef.current = phase
   }, [phase, start])
 
   // routing 중 end 이동
@@ -379,7 +498,6 @@ const MapContainer = () => {
         fixAnchor(pickupMarkerRef.current, pickupCapsule.root)
         fixAnchor(dropoffMarkerRef.current, dropoffCapsule.root)
 
-        // 도착 마커 보장
         if (endMarkerRef.current) {
           const endLL = new window.naver.maps.LatLng(end.lat, end.lng)
           endMarkerRef.current.setMap(map)
@@ -398,47 +516,33 @@ const MapContainer = () => {
       })()
   }, [phase, start, end])
 
-  // ⬇️ 공용 리셋 함수 (X/다시선택 모두 사용)
+  // ⬇️ 공용 리셋
   const handleResetToInitial = () => {
     const map = mapRef.current
     if (!map) return
-
-    // 1) 레이어/도착 마커 정리
     clearRouteLayers()
     if (endMarkerRef.current) endMarkerRef.current.setMap(null)
-
-    // 2) 상태 초기화
     setEnd(null)
     setPhase("idle")
 
-    // 3) 기준 좌표/줌 계산
     const initStart = initialStartLLRef.current ?? initialCenterRef.current ?? map.getCenter()
     const backZoom = preRoutingZoomRef.current ?? initialZoomRef.current ?? map.getZoom()
 
-    // 4) 시작 마커를 즉시 맵에 붙이고, 위치/라벨/스토어 갱신
     ensureStartMarker(map)
     startMarkerRef.current!.setPosition(initStart)
-    setLabelAndFix(
-      startMarkerRef.current!,
-      startRootRef.current!,
-      startLabelElRef.current!,
-      "여기서 출발"
-    )
+    setLabelAndFix(startMarkerRef.current!, startRootRef.current!, startLabelElRef.current!, "여기서 출발")
+
     const sLat = initStart.lat()
     const sLng = initStart.lng()
     setServiceArea(isInsideServiceArea(sLat, sLng))
     setStart({ lat: sLat, lng: sLng })
 
-    // 5) 뷰 원복 (idle 의존 X)
     map.setCenter(initStart)
     map.setZoom(backZoom, true)
   }
 
-  // 🔔 resetKey가 바뀌면 X 버튼과 동일 동작 수행
   useEffect(() => {
-    if (resetKey > 0) {
-      handleResetToInitial()
-    }
+    if (resetKey > 0) handleResetToInitial()
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [resetKey])
 
@@ -450,7 +554,7 @@ const MapContainer = () => {
         <button
           type="button"
           onClick={handleResetToInitial}
-          className=" absolute top-3 left-3 z-[1000] h-10 w-10 rounded-full bg-white shadow-[0_2px_10px_rgba(0,0,0,0.15)] flex items-center justify-center active:scale-[0.98]"
+          className=" absolute top-3 left-3 z-[1100] h-10 w-10 rounded-full bg-white shadow-[0_2px_10px_rgba(0,0,0,0.15)] flex items-center justify-center active:scale-[0.98]"
           aria-label="뒤로가기"
         >
           <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" strokeWidth="2">
@@ -463,7 +567,7 @@ const MapContainer = () => {
         <button
           type="button"
           onClick={handleResetToInitial}
-          className=" absolute top-3 left-3 z-[1000] h-10 w-10 rounded-full bg-white shadow-[0_2px_10px_rgba(0,0,0,0.15)] flex items-center justify-center active:scale-[0.98]"
+          className=" absolute top-3 left-3 z-[1100] h-10 w-10 rounded-full bg-white shadow-[0_2px_10px_rgba(0,0,0,0.15)] flex items-center justify-center active:scale-[0.98]"
           aria-label="닫기"
           title="초기 화면으로"
         >
