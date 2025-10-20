@@ -3,7 +3,7 @@ import { useDRTStore } from "@/store/drtStore"
 import { isInsideServiceArea } from "@/utils/geo"
 
 const VanIcon = () => (
-  <img src="/icons/van.png" alt="" className="w-[50px] h-[50px] object-contain" draggable={false} />
+  <img src={import.meta.env.BASE_URL + "icons/van.png"} alt="" className="w-[50px] h-[50px] object-contain" draggable={false} />
 )
 
 /* ───────── Reverse Geocoding: 좌표→주소 라벨 ───────── */
