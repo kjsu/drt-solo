@@ -15,6 +15,8 @@ import {
 import { planRouteDummy } from "@/features/routing/planRouteDummy"
 // ★ 변경: 고스트 마커 컨트롤러 임포트
 import { createGhostController } from "@/features/map/ghostMarker"
+// ★ 변경: 초기 지도 세팅 유틸 임포트
+import { initMap } from "@/features/map/initMap"
 
 const MapContainer = () => {
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -114,35 +116,29 @@ const MapContainer = () => {
     if (!window.naver || !mapDivRef.current) return
 
     const defaultLocation = new window.naver.maps.LatLng(37.4563, 126.8951)
-    const map = new window.naver.maps.Map(mapDivRef.current, {
-      center: defaultLocation,
-      zoom: 14,
-      tileSpare: 4,
+
+    // ★ 변경: initMap으로 초기 지도/오버레이/시작마커 생성
+    const { map, startMarker, startCapsule, overlays } = initMap({
+      mapDiv: mapDivRef.current,
+      defaultCenter: defaultLocation,
+      startLabel: "여기서 출발",
+      startBg: COLOR_BLUE,
+      drawAreaOpts: {
+        strokeColor: "#2563eb",
+        strokeOpacity: 0.9,
+        strokeWeight: 2,
+        fillColor: "#3b82f6",
+        fillOpacity: 0.10,
+        zIndex: 1,
+      },
     })
     mapRef.current = map
     initialCenterRef.current = defaultLocation
     initialZoomRef.current = 14
-
-    // 서비스 영역 오버레이
-    serviceAreaOverlaysRef.current = drawServiceAreas(map, {
-      strokeColor: "#2563eb",
-      strokeOpacity: 0.9,
-      strokeWeight: 2,
-      fillColor: "#3b82f6",
-      fillOpacity: 0.10,
-      zIndex: 1,
-    })
-
-    // 시작 마커
-    const startCapsule = createCapsuleMarker("여기서 출발", COLOR_BLUE)
+    serviceAreaOverlaysRef.current = overlays
+    // 시작 마커/캡슐 ref 설정 및 앵커 픽스
     startRootRef.current = startCapsule.root
     startLabelElRef.current = startCapsule.labelEl
-    const startMarker = new window.naver.maps.Marker({
-      position: defaultLocation,
-      map,
-      icon: { content: startCapsule.root, anchor: new window.naver.maps.Point(50, 34) },
-      zIndex: 10,
-    })
     startMarkerRef.current = startMarker
     fixAnchor(startMarker, startCapsule.root)
 
