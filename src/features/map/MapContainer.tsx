@@ -13,6 +13,8 @@ import {
   setLabelAndFix,
 } from "@/utils/capsuleMarker"
 import { planRouteDummy } from "@/features/routing/planRouteDummy"
+// ★ 변경: 고스트 마커 컨트롤러 임포트
+import { createGhostController } from "@/features/map/ghostMarker"
 
 const MapContainer = () => {
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -63,129 +65,11 @@ const MapContainer = () => {
 
   const serviceAreaOverlaysRef = useRef<ServiceAreaOverlay[]>([])
 
-  // ───────── “무조건 보이는” 고스트 마커 (전역 fixed + all:initial) ─────────
-  function ensureDotsStyle() {
-    if (document.getElementById("drt-dots-style")) return
-    const style = document.createElement("style")
-    style.id = "drt-dots-style"
-    style.textContent = `
-      .drt-dots { display: inline-flex; gap: 6px; align-items: center; }
-      .drt-dots span { opacity: .25; animation: drtDot 900ms infinite ease-in-out; }
-      .drt-dots span:nth-child(2) { animation-delay: .12s; }
-      .drt-dots span:nth-child(3) { animation-delay: .24s; }
-      @keyframes drtDot {
-        0%   { opacity: .25; transform: translateY(0); }
-        35%  { opacity: 1;   transform: translateY(-1px); }
-        100% { opacity: .25; transform: translateY(0); }
-      }
-    `
-    document.head.appendChild(style)
-  }
-
-  const ghostStartRef = useRef<HTMLDivElement | null>(null)
-  const ghostEndRef = useRef<HTMLDivElement | null>(null)
-  const ghostLoopRef = useRef<number | null>(null)
+  // ───────── “무조건 보이는” 고스트 마커 (ref → 컨트롤러로 대체) ─────────
+  // ★ 변경: draggingRef는 기존 로직 보존 (MapContainer의 다른 분기에서 사용함)
   const draggingRef = useRef(false)
-
-  function createHardVisibleGhost(text: string, bg: string) {
-    ensureDotsStyle();
-
-    const root = document.createElement("div")
-      ; (root.style as any).all = "initial"
-    root.style.position = "fixed"
-    root.style.left = "50%"
-    root.style.top = "50%"
-    root.style.transform = "translate(-50%, -100%) translateZ(0)"
-    root.style.zIndex = "2147483647"
-    root.style.pointerEvents = "none"
-    root.style.display = "none"
-    root.style.filter = "drop-shadow(0 12px 22px rgba(0,0,0,0.22))"
-
-    const capsule = document.createElement("div")
-      ; (capsule.style as any).all = "initial"
-    capsule.innerHTML = `<span class="drt-dots"><span>·</span><span>·</span><span>·</span></span>`
-    capsule.style.display = "inline-flex"
-    capsule.style.alignItems = "center"
-    capsule.style.justifyContent = "center"
-    capsule.style.padding = "8px 14px"
-    capsule.style.fontSize = "12px"
-    capsule.style.fontWeight = "700"
-    capsule.style.lineHeight = "1"
-    capsule.style.color = "#fff"
-    capsule.style.background = bg
-    capsule.style.borderRadius = "9999px"
-    capsule.style.boxShadow = "0 6px 14px rgba(0,0,0,0.16)"
-    capsule.style.fontFamily =
-      '-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,"Noto Sans KR","Apple SD Gothic Neo","Malgun Gothic","Helvetica Neue",Arial,sans-serif'
-
-    const tail = document.createElement("div")
-      ; (tail.style as any).all = "initial"
-    tail.style.width = "2px"
-    tail.style.height = "16px"
-    tail.style.marginTop = "-1px"
-    tail.style.borderRadius = "1px"
-    tail.style.background = bg
-    tail.style.display = "block"
-
-    const dot = document.createElement("div")
-      ; (dot.style as any).all = "initial"
-    dot.style.width = "14px"
-    dot.style.height = "14px"
-    dot.style.borderRadius = "9999px"
-    dot.style.background = "rgba(0,0,0,0.35)"
-    dot.style.margin = "6px auto 0"
-    dot.style.filter = "blur(1px)"
-
-    const col = document.createElement("div")
-      ; (col.style as any).all = "initial"
-    col.style.display = "inline-flex"
-    col.style.flexDirection = "column"
-    col.style.alignItems = "center"
-    col.appendChild(capsule)
-    col.appendChild(tail)
-    col.appendChild(dot)
-
-    root.appendChild(col)
-    document.documentElement.appendChild(root)
-    return root
-  }
-
-  function ensureGhosts() {
-    if (!ghostStartRef.current) ghostStartRef.current = createHardVisibleGhost("여기서 출발", COLOR_BLUE)
-    if (!ghostEndRef.current) ghostEndRef.current = createHardVisibleGhost("도착", COLOR_RED_500)
-  }
-  function placeGhostOverMapCenter(el: HTMLElement | null) {
-    if (!el || !mapDivRef.current) return
-    const r = mapDivRef.current.getBoundingClientRect()
-    const cx = r.left + r.width / 2
-    const cy = r.top + r.height / 2
-    el.style.left = `${Math.round(cx)}px`
-    el.style.top = `${Math.round(cy)}px`
-  }
-  function showGhost(kind: "start" | "end") {
-    ensureGhosts()
-    const el = kind === "start" ? ghostStartRef.current : ghostEndRef.current
-    if (!el) return
-    el.style.display = "block"
-    placeGhostOverMapCenter(el)
-    if (ghostLoopRef.current == null) {
-      const tick = () => {
-        ghostLoopRef.current = null
-        if (!draggingRef.current) return
-        placeGhostOverMapCenter(el)
-        ghostLoopRef.current = requestAnimationFrame(tick)
-      }
-      ghostLoopRef.current = requestAnimationFrame(tick)
-    }
-  }
-  function hideGhost(kind: "start" | "end") {
-    const el = kind === "start" ? ghostStartRef.current : ghostEndRef.current
-    if (el) el.style.display = "none"
-    if (ghostLoopRef.current != null) {
-      cancelAnimationFrame(ghostLoopRef.current)
-      ghostLoopRef.current = null
-    }
-  }
+  // ★ 변경: 고스트 컨트롤러 ref
+  const ghostRef = useRef<ReturnType<typeof createGhostController> | null>(null)
 
   function clearRouteLayers() {
     legStartToPickupRef.current?.setMap(null)
@@ -273,16 +157,23 @@ const MapContainer = () => {
     commitCenterAsStart()
     initialStartLLRef.current = startMarker.getPosition()!
 
+    // ★ 변경: 고스트 컨트롤러 생성
+    ghostRef.current = createGhostController(
+      () => mapDivRef.current,
+      () => draggingRef.current,
+      { startLabel: "여기서 출발", endLabel: "도착", startBg: COLOR_BLUE, endBg: COLOR_RED_500 }
+    )
+
     // ───────── 드래그: 실제 마커 숨기고 고스트만 표시 ─────────
     const onDragStart = window.naver.maps.Event.addListener(map, "dragstart", () => {
       if (phaseRef.current === "selected") return
       draggingRef.current = true
       if (phaseRef.current === "routing") {
         endMarkerRef.current?.setMap(null)     // 실제 마커 숨김
-        showGhost("end")                       // 고스트 표시(전역 fixed)
+        ghostRef.current?.show("end")          // ★ 변경
       } else {
         startMarker.setMap(null)
-        showGhost("start")
+        ghostRef.current?.show("start")        // ★ 변경
       }
     })
     const onDrag = window.naver.maps.Event.addListener(map, "drag", () => {
@@ -293,7 +184,7 @@ const MapContainer = () => {
       draggingRef.current = false
       const center = map.getCenter()
       if (phaseRef.current === "routing") {
-        hideGhost("end")
+        ghostRef.current?.hide("end")          // ★ 변경
         if (!endMarkerRef.current) {
           const endCap = createCapsuleMarker("도착", COLOR_RED_500)
           endRootRef.current = endCap.root
@@ -313,7 +204,7 @@ const MapContainer = () => {
         }
         setEndIfChangedLL(center)
       } else {
-        hideGhost("start")
+        ghostRef.current?.hide("start")        // ★ 변경
         startMarker.setMap(map)
         startMarker.setPosition(center)
         setLabelAndFix(startMarker, startRootRef.current!, startLabelElRef.current!, "여기서 출발")
@@ -355,11 +246,9 @@ const MapContainer = () => {
       startMarkerRef.current?.setMap(null)
       endMarkerRef.current?.setMap(null)
       clearServiceAreas(serviceAreaOverlaysRef.current)
-      // 고스트 정리
-      ghostStartRef.current?.remove()
-      ghostEndRef.current?.remove()
-      if (ghostLoopRef.current != null) cancelAnimationFrame(ghostLoopRef.current)
-      ghostLoopRef.current = null
+      // ★ 변경: 고스트 정리
+      ghostRef.current?.cleanup()
+      ghostRef.current = null
       draggingRef.current = false
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
