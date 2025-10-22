@@ -17,6 +17,8 @@ import { planRouteDummy } from "@/features/routing/planRouteDummy"
 import { createGhostController } from "@/features/map/ghostMarker"
 // ★ 변경: 초기 지도 세팅 유틸 임포트
 import { initMap } from "@/features/map/initMap"
+// ★ 변경: 지도 이벤트 바인딩 유틸 임포트
+import { bindMapEvents } from "@/features/map/mapEvents"
 
 const MapContainer = () => {
   const wrapRef = useRef<HTMLDivElement>(null)
@@ -160,85 +162,41 @@ const MapContainer = () => {
       { startLabel: "여기서 출발", endLabel: "도착", startBg: COLOR_BLUE, endBg: COLOR_RED_500 }
     )
 
+    const setLabelAndFixAdapter = (
+      marker: any,
+      root: HTMLElement | null | undefined,
+      labelEl: HTMLElement | null | undefined,
+      text: string
+    ) => setLabelAndFix(marker, root ?? null, labelEl ?? null, text)
+
     // ───────── 드래그: 실제 마커 숨기고 고스트만 표시 ─────────
-    const onDragStart = window.naver.maps.Event.addListener(map, "dragstart", () => {
-      if (phaseRef.current === "selected") return
-      draggingRef.current = true
-      if (phaseRef.current === "routing") {
-        endMarkerRef.current?.setMap(null)     // 실제 마커 숨김
-        ghostRef.current?.show("end")          // ★ 변경
-      } else {
-        startMarker.setMap(null)
-        ghostRef.current?.show("start")        // ★ 변경
-      }
-    })
-    const onDrag = window.naver.maps.Event.addListener(map, "drag", () => {
-      // 고스트는 rAF 루프가 mapDiv 중앙을 계속 추적 → 여기선 아무것도 안 함
-    })
-    const onDragEnd = window.naver.maps.Event.addListener(map, "dragend", () => {
-      if (phaseRef.current === "selected") return
-      draggingRef.current = false
-      const center = map.getCenter()
-      if (phaseRef.current === "routing") {
-        ghostRef.current?.hide("end")          // ★ 변경
-        if (!endMarkerRef.current) {
-          const endCap = createCapsuleMarker("도착", COLOR_RED_500)
-          endRootRef.current = endCap.root
-          endLabelElRef.current = endCap.labelEl
-          const em = new window.naver.maps.Marker({
-            position: center,
-            map,
-            icon: { content: endCap.root, anchor: new window.naver.maps.Point(50, 34) },
-            zIndex: 11,
-          })
-          endMarkerRef.current = em
-          fixAnchor(em, endCap.root)
-        } else {
-          endMarkerRef.current.setMap(map)
-          endMarkerRef.current.setPosition(center)
-          setLabelAndFix(endMarkerRef.current, endRootRef.current!, endLabelElRef.current!, "도착")
-        }
-        setEndIfChangedLL(center)
-      } else {
-        ghostRef.current?.hide("start")        // ★ 변경
-        startMarker.setMap(map)
-        startMarker.setPosition(center)
-        setLabelAndFix(startMarker, startRootRef.current!, startLabelElRef.current!, "여기서 출발")
-        const lat = center.lat(), lng = center.lng()
-        setServiceArea(isInsideServiceArea(lat, lng))
-        setStart({ lat, lng })
-      }
+    // (주석 유지) 아래 한 줄로 이벤트 바인딩 통합
+    const unbind = bindMapEvents({
+      map,
+      phaseRef,
+      draggingRef,
+      ghostRef,
+      startMarkerRef,
+      endMarkerRef,
+      startRootRef,
+      startLabelElRef,
+      endRootRef,
+      endLabelElRef,
+      setLabelAndFix: setLabelAndFixAdapter,
+      setEndIfChangedLL,
+      setServiceArea,
+      isInsideServiceArea,
+      setStart,
+      COLOR_RED_500,
     })
 
     // 줌 변경: 드래그 아닐 때만 보정
-    const onZoom = window.naver.maps.Event.addListener(map, "zoom_changed", () => {
-      if (phaseRef.current === "selected") return
-      if (draggingRef.current) return
-      const center = map.getCenter()
-      if (phaseRef.current === "routing") {
-        endMarkerRef.current?.setPosition(center)
-      } else {
-        startMarker.setPosition(center)
-      }
-    })
-
     // idle: 드래그 아닐 때만 라벨 복구
-    const onIdle = window.naver.maps.Event.addListener(map, "idle", () => {
-      if (phaseRef.current === "selected") return
-      if (draggingRef.current) return
-      if (phaseRef.current === "routing") {
-        setLabelAndFix(endMarkerRef.current, endRootRef.current, endLabelElRef.current, "도착")
-      } else {
-        setLabelAndFix(startMarkerRef.current, startRootRef.current, startLabelElRef.current, "여기서 출발")
-      }
-    })
+    // (위 두 섹션의 동작은 bindMapEvents 내부에서 그대로 수행됨)
 
     return () => {
-      window.naver.maps.Event.removeListener(onDragStart)
-      window.naver.maps.Event.removeListener(onDrag)
-      window.naver.maps.Event.removeListener(onDragEnd)
-      window.naver.maps.Event.removeListener(onZoom)
-      window.naver.maps.Event.removeListener(onIdle)
+      // 기존 removeListener들 제거 → 통합 해제 호출
+      unbind()
       startMarkerRef.current?.setMap(null)
       endMarkerRef.current?.setMap(null)
       clearServiceAreas(serviceAreaOverlaysRef.current)
